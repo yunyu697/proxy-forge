@@ -1,0 +1,19 @@
+[package]
+name = "proxy-forge"
+version = "0.2.0"
+description = "代理工坊 — mihomo / sing-box 配置生成器"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

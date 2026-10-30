@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    name: 类型检查 + 冒烟测试 + 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 冒烟测试（协议解析 + 双内核生成）
+        run: npm run smoke
+
+      - name: 生产构建
+        run: npm run build
+
+  desktop:
+    name: 桌面端打包（macOS）
+    needs: test
+    # 只在打 v* 标签时构建桌面安装包，避免日常 push 拖慢 CI
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 打包（构建号取 run number）
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: npm run tauri:build
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProxyForge-macOS
+          path: src-tauri/target/release/bundle/macos/*.app

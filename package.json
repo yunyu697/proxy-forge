@@ -1,0 +1,38 @@
+{
+  "name": "proxy-forge",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "代理工坊 - mihomo / sing-box 配置生成器",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "esbuild src/core/smoke.ts --bundle --platform=node --outfile=/tmp/pf-smoke.mjs --log-level=error && node /tmp/pf-smoke.mjs",
+    "sync-version": "node scripts/sync-version.mjs",
+    "preversion": "npm run typecheck && npm run smoke",
+    "version": "npm run sync-version && git add -A",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "js-yaml": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/js-yaml": "^4.0.9",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3"
+  }
+}
