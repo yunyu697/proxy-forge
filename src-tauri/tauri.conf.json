@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ProxyForge",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "identifier": "com.proxyforge.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,10 +26,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
+    "targets": [
+      "app"
+    ],
     "category": "DeveloperTool",
     "shortDescription": "mihomo / sing-box 配置生成器",
     "longDescription": "导入代理协议链接，按设备形态与使用场景引导式生成 mihomo (Clash.Meta) 与 sing-box 配置文件。",
-    "icon": ["icons/icon.png"]
+    "icon": [
+      "icons/icon.png"
+    ]
   }
 }
