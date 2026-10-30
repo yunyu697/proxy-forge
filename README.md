@@ -66,9 +66,11 @@ npm run smoke    # esbuild 打包后 node 运行，26 项断言
 | Job | 触发 | 内容 |
 | --- | --- | --- |
 | `test` | push / PR | 安装依赖 → 类型检查 → 冒烟测试 → 生产构建 |
-| `desktop` | 仅 `v*` 标签 | macOS 上 `tauri build`，产物（.app）上传为 Artifact |
+| `desktop` | 仅 `v*` 标签 | 全平台矩阵打包：macOS（dmg）/ Windows（NSIS exe）/ Linux（AppImage + deb），产物上传为 Artifact |
 
-发布桌面版：`npm version patch && git push --follow-tags` 即可触发完整流程。
+> Tauri 不支持交叉编译，Windows 与 Linux 安装包由 CI 在对应系统 runner 上产出；本机只能构建 macOS 包。
+
+发布桌面版：`npm version patch && git push --follow-tags` 即可触发完整流程。Release Notes 见 [RELEASE_NOTES.md](./RELEASE_NOTES.md)。
 
 ## 目录结构
 
