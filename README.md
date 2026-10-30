@@ -53,6 +53,23 @@ npm run tauri:build    # 打包安装包（默认 --debug 产物在 src-tauri/ta
 npm run smoke    # esbuild 打包后 node 运行，26 项断言
 ```
 
+## 版本号与构建号
+
+- **版本号**唯一来源是 `package.json`，用 `npm version patch|minor|major` 修改会自动同步到 `src-tauri/tauri.conf.json` 与 `Cargo.toml`（`scripts/sync-version.mjs`），并在打版本前跑一次类型检查 + 冒烟测试
+- **构建号**在构建时注入（`src/version.ts` 读取）：优先环境变量 `BUILD_NUMBER`（CI 里即 GitHub run number）→ 本地取 `git rev-list --count HEAD` → 非 git 环境退化为日期。侧边栏与移动端头部会显示 `v0.2.0 · build N`
+- 版本号也在 Tauri 打包产物中体现（.app 的 Info.plist 等）
+
+## CI（GitHub Actions）
+
+`.github/workflows/ci.yml`，两个 job：
+
+| Job | 触发 | 内容 |
+| --- | --- | --- |
+| `test` | push / PR | 安装依赖 → 类型检查 → 冒烟测试 → 生产构建 |
+| `desktop` | 仅 `v*` 标签 | macOS 上 `tauri build`，产物（.app）上传为 Artifact |
+
+发布桌面版：`npm version patch && git push --follow-tags` 即可触发完整流程。
+
 ## 目录结构
 
 ```
@@ -66,8 +83,10 @@ src/
     builders/mihomo.ts   # mihomo YAML 生成（含设备差异化调优）
     builders/singbox.ts  # sing-box JSON 生成（1.11 / 1.12）
     generator.ts         # 编排：场景答案 -> 规则/策略组/路由计划
-  components/            # 六步向导 UI
+  components/            # 七步向导 UI（含部署与 DNS 步骤）
   store/useStore.ts      # zustand + localStorage 持久化
+  version.ts             # 版本号 / 构建号（vite 注入）
+scripts/sync-version.mjs # npm version 时同步三处版本号
 src-tauri/               # Tauri 2 桌面端配置
 ```
 
