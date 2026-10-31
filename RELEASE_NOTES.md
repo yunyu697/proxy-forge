@@ -1,5 +1,23 @@
 # Release Notes
 
+## v1.2.8（2026-10-31）—— 内置更新检查（不依赖签名密钥）
+
+### 新增：启动后自动检查新版本
+
+Tauri 官方的 updater 插件强制校验更新包签名（`Config.pubkey` 是必填字段，`Update::install()` 内部无条件调用 `verify()`，没有任何开关能跳过），启用它必须长期维护一对 minisign 密钥。这一版改为**只检查、不安装**：
+
+- 启动 1.5 秒后请求 `api.github.com/repos/yunyu697/proxy-forge/releases/latest`，按语义化版本比较（`1.10.0 > 1.9.9`，不是字符串比较）
+- 有新版本时在页面顶部显示提示条，自动按当前平台挑好安装包（macOS → `.dmg`，Windows → `-setup.exe`，Linux → `.AppImage`，Android → `.apk`），点「去下载」用系统浏览器打开直链
+- 支持「忽略此版本」（记在 localStorage，直到出现更新的版本才再提示）和「本次关闭」
+- 结果缓存 6 小时，避免频繁打 GitHub API（未认证限流 60 次/小时/IP）
+- 断网、限流、JSON 异常一律静默失败，绝不影响主流程
+
+### 配套改动
+
+- `src-tauri`：新增 `open_url` 命令（内部走 `tauri-plugin-opener`，桌面与 Android 通用），只放行 `http/https`，挡住 `file://` 之类协议
+- 删除已失效的更新器清单链路：`scripts/gen-updater-manifest.mjs`、`scripts/merge-updater-manifest.mjs` 以及 CI 里的 `publish-updater` job。之前产出的 `latest.json` 因为没开 `createUpdaterArtifacts` 不生成 `.sig`，`platforms` 一直是空对象，属于误导性产物
+- 测试：`src/core/update.test.ts` 覆盖版本比较、平台识别、资产挑选、API 响应整理、异常降级（18 项）
+
 ## v1.2.7（2026-10-31）—— 只差 Android：补齐 tauri npm script
 
 v1.2.6 里 macOS / Windows / Linux 三个桌面端全部成功（dmg、exe、msi、便携 zip、AppImage、deb、rpm、latest.json 齐全），Android 仍失败。

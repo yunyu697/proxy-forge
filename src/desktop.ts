@@ -21,3 +21,20 @@ export function tcpPing(host: string, port: number, timeoutMs = 4000): Promise<n
 export function saveTextFile(fileName: string, content: string): Promise<string | null> {
   return invoke<string | null>('save_text_file', { fileName, content });
 }
+
+/**
+ * 用系统默认浏览器打开链接。
+ * 桌面/移动端走 Rust 侧 open_url（内部用 tauri-plugin-opener），
+ * 浏览器环境退化为 window.open。只接受 http/https，防止 file:// 之类被利用。
+ */
+export function openUrl(url: string): void {
+  if (!/^https?:\/\//i.test(url)) return;
+  if (isTauri()) {
+    invoke<void>('open_url', { url }).catch(() => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+

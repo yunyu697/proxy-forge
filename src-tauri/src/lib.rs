@@ -42,6 +42,22 @@ fn save_text_file(
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
+/// 用系统默认浏览器打开链接（桌面与移动端通用）。
+///
+/// 只放行 http/https：这个命令由前端传入任意字符串，必须挡住 `file://`、`javascript:`
+/// 之类的协议，避免被当成打开本地文件或执行脚本的入口。
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let target = url.trim();
+    if !(target.starts_with("https://") || target.starts_with("http://")) {
+        return Err("只允许打开 http/https 链接".into());
+    }
+    app.opener()
+        .open_url(target.to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// 桌面端与移动端共用的启动入口。
 ///
 /// Android / iOS 上 Tauri 以动态库形式加载应用，`tauri android build` 会执行
@@ -51,7 +67,8 @@ fn save_text_file(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![tcp_ping, save_text_file])
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![tcp_ping, save_text_file, open_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

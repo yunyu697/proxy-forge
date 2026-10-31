@@ -9,7 +9,9 @@ import { RulesStep } from './components/RulesStep';
 import { SettingsStep } from './components/SettingsStep';
 import { PreviewStep } from './components/PreviewStep';
 import { DeployStep } from './components/DeployStep';
-import { VERSION_LABEL } from './version';
+import { UpdateBanner } from './components/UpdateBanner';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { APP_VERSION, VERSION_LABEL } from './version';
 import { currentTheme, toggleTheme, type Theme } from './theme';
 import { setLang, t, useLang } from './i18n';
 
@@ -79,6 +81,7 @@ export default function App() {
   const nodes = useStore((s) => s.nodes);
   const core = useStore((s) => s.options.core);
   const setOptions = useStore((s) => s.setOptions);
+  const { update, openDownload, skipVersion, dismiss } = useUpdateCheck(APP_VERSION);
 
   const stepTitle = (s: (typeof STEPS)[number]) => (lang === 'en' ? t(s.titleKey) : s.title);
   const stepDesc = (s: (typeof STEPS)[number]) => (lang === 'en' ? t(s.descKey) : s.desc);
@@ -184,6 +187,15 @@ export default function App() {
 
       {/* 主内容 */}
       <main className="min-w-0 flex-1">
+        {update && (
+          <UpdateBanner
+            update={update}
+            onDownload={openDownload}
+            onSkip={skipVersion}
+            onDismiss={dismiss}
+          />
+        )}
+
         {/* 移动端头部 */}
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-ink-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center gap-2">

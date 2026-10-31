@@ -73,21 +73,18 @@ jobs:
             args: --target universal-apple-darwin --bundles dmg
             bundle_path: src-tauri/target/universal-apple-darwin/release/bundle/**
             bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
-            platform: darwin
           - os: windows-latest
             label: Windows
             targets: ''
             args: --bundles nsis,msi
             bundle_path: src-tauri/target/release/bundle/**
             bundle_dir: src-tauri/target/release/bundle
-            platform: windows
           - os: ubuntu-22.04
             label: Linux
             targets: ''
             args: --bundles appimage,deb,rpm
             bundle_path: src-tauri/target/release/bundle/**
             bundle_dir: src-tauri/target/release/bundle
-            platform: linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -161,12 +158,6 @@ jobs:
           path: ${{ matrix.bundle_path }}
           if-no-files-found: warn
 
-      - name: 生成更新器清单
-        env:
-          UPDATE_PLATFORM: ${{ matrix.platform }}
-        shell: bash
-        run: node scripts/gen-updater-manifest.mjs "updater-${{ matrix.platform }}.json"
-
       # 跨平台兼容的上传（macOS 自带 bash 3.2 不支持 mapfile，统一用 find -print0 | xargs）
       # 只从 bundle 目录取安装包：target 目录下还有 build-script-build.exe 等构建脚本产物，
       # 之前按 src-tauri/target 全量 find 会把它们一起传上 Release（同名冲突还会 404）。
@@ -182,7 +173,6 @@ jobs:
           if [ -f "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ]; then
             gh release upload "$GITHUB_REF_NAME" --clobber "$RUNNER_TEMP/ProxyForge-portable-windows.zip"
           fi
-          gh release upload "$GITHUB_REF_NAME" --clobber "updater-${{ matrix.platform }}.json"
 
   android:
     name: Android 构建（APK / AAB）
@@ -315,24 +305,3 @@ jobs:
         run: |
           find src-tauri/gen/android -name '*.apk' -path '*/outputs/*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
           find src-tauri/gen/android -name '*.aab' -path '*/outputs/*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
-
-  publish-updater:
-    name: 合并更新器清单
-    needs: desktop
-    # 即使某个平台打包失败也要尝试合并，避免 latest.json 完全缺失（缺失平台在清单里留空）
-    if: always() && !cancelled() && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 下载三平台清单并合并为 latest.json
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "$GITHUB_REF_NAME" -p "updater-*.json" -D updater/
-          node scripts/merge-updater-manifest.mjs updater/ > latest.json
-
-      - name: 上传 latest.json 到 Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" latest.json --clobber
