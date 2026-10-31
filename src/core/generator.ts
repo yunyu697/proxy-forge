@@ -297,7 +297,9 @@ export function buildPlan(nodes: ProxyNode[], options: GenerateOptions): ConfigP
   // 未被任何规则引用的规则集也提醒
   const unused = ruleSetItems.filter((r) => !usedKeys.has(r.key));
   if (unused.length) {
-    warnings.push(`有 ${unused.length} 套规则集未被引用（${unused.map((r) => r.def.name).join('、')}），已自动并入路由。`);
+    warnings.push(
+      `有 ${unused.length} 套规则集未被引用（${unused.map((r) => r.def.name).join('、')}），已自动并入路由。`,
+    );
   }
 
   /* -------------------- 设备相关提示 -------------------- */

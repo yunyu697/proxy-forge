@@ -30,6 +30,10 @@ const PATHS: Record<string, string> = {
   refresh: 'M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6',
   eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-3.3 3.6-6 8-6s8 2.7 8 6',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  moon: 'M20.4 14.2A8.5 8.5 0 0 1 9.8 3.6a8.5 8.5 0 1 0 10.6 10.6z',
+  gauge: 'M12 14l4-5M4 20a9 9 0 1 1 16 0',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 3',
 };
 
 export function Icon({
@@ -310,20 +314,16 @@ export function EmptyState({
 
 /* ------------------------------- Notice ------------------------------ */
 
-export function Notice({
-  tone = 'info',
-  children,
-}: {
-  tone?: 'info' | 'warn' | 'error';
-  children: React.ReactNode;
-}) {
+export function Notice({ tone = 'info', children }: { tone?: 'info' | 'warn' | 'error'; children: React.ReactNode }) {
   const tones = {
     info: 'border-brand-200 bg-brand-50 text-brand-800',
     warn: 'border-amber-200 bg-amber-50 text-amber-800',
     error: 'border-red-200 bg-red-50 text-red-800',
   };
   return (
-    <div className={clsx('flex items-start gap-2 rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed', tones[tone])}>
+    <div
+      className={clsx('flex items-start gap-2 rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed', tones[tone])}
+    >
       <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
       <div className="min-w-0">{children}</div>
     </div>

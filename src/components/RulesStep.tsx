@@ -81,7 +81,9 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                 onClick={() => setOptions({ strategy: s.id })}
                 className={clsx(
                   'relative rounded-xl border p-4 text-left transition',
-                  active ? 'border-brand-500 bg-brand-50/70 ring-2 ring-brand-100' : 'border-ink-200 bg-white hover:border-brand-300',
+                  active
+                    ? 'border-brand-500 bg-brand-50/70 ring-2 ring-brand-100'
+                    : 'border-ink-200 bg-white hover:border-brand-300',
                 )}
               >
                 {active && (
@@ -173,7 +175,10 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                             {q.options.map((o) => {
                               const picked = (options.scenarioAnswers[s.id]?.[q.id] || []).includes(o.value);
                               return (
-                                <label key={o.value} className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-600">
+                                <label
+                                  key={o.value}
+                                  className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-600"
+                                >
                                   <input
                                     type="radio"
                                     className="accent-brand-600"
@@ -271,11 +276,13 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-1.5">
                                 <span className="text-[13px] font-medium text-ink-800">{r.name}</span>
-                                {auto && <Chip tone="brand" className="!px-1.5 !py-0 !text-[10px]">场景带入</Chip>}
+                                {auto && (
+                                  <Chip tone="brand" className="!px-1.5 !py-0 !text-[10px]">
+                                    场景带入
+                                  </Chip>
+                                )}
                               </div>
-                              {r.desc && (
-                                <p className="mt-0.5 text-[11px] leading-relaxed text-ink-500">{r.desc}</p>
-                              )}
+                              {r.desc && <p className="mt-0.5 text-[11px] leading-relaxed text-ink-500">{r.desc}</p>}
                               <div className="mt-1.5 flex items-center gap-1.5">
                                 <Chip tone={r.action === 'direct' ? 'green' : r.action === 'reject' ? 'red' : 'blue'}>
                                   {r.action === 'direct' ? '直连' : r.action === 'reject' ? '拦截' : '代理'}
@@ -287,7 +294,9 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                               type="button"
                               className="mt-0.5 shrink-0 text-ink-300 transition hover:text-brand-600"
                               title="复制规则集地址"
-                              onClick={() => navigator.clipboard?.writeText(resolveRuleSetUrl(r, options.core, options.mirror))}
+                              onClick={() =>
+                                navigator.clipboard?.writeText(resolveRuleSetUrl(r, options.core, options.mirror))
+                              }
                             >
                               <Icon name="copy" size={13} />
                             </button>
@@ -304,8 +313,8 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
 
         <div className="mt-4">
           <Notice tone="info">
-            规则集来自 MetaCubeX/meta-rules-dat（domain-list-community 编译），当前镜像为
-            「{MIRRORS.find((m) => m.id === options.mirror)?.label}」。如果下载失败，换一个镜像即可。
+            规则集来自 MetaCubeX/meta-rules-dat（domain-list-community 编译），当前镜像为 「
+            {MIRRORS.find((m) => m.id === options.mirror)?.label}」。如果下载失败，换一个镜像即可。
           </Notice>
         </div>
       </Card>
@@ -340,7 +349,10 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                     />
                   </Field>
                   <Field label="规则类型">
-                    <Select value={c.kind} onChange={(e) => updateCustomRuleSet(c.id, { kind: e.target.value as 'domain' | 'ipcidr' })}>
+                    <Select
+                      value={c.kind}
+                      onChange={(e) => updateCustomRuleSet(c.id, { kind: e.target.value as 'domain' | 'ipcidr' })}
+                    >
                       <option value="domain">域名规则（domain）</option>
                       <option value="ipcidr">IP 段规则（ipcidr）</option>
                     </Select>
@@ -348,7 +360,9 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                   <Field label="命中动作">
                     <Select
                       value={c.action}
-                      onChange={(e) => updateCustomRuleSet(c.id, { action: e.target.value as 'proxy' | 'direct' | 'reject' })}
+                      onChange={(e) =>
+                        updateCustomRuleSet(c.id, { action: e.target.value as 'proxy' | 'direct' | 'reject' })
+                      }
                     >
                       <option value="proxy">走代理</option>
                       <option value="direct">直连</option>
@@ -388,14 +402,25 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
         />
         {options.customRules.length === 0 ? (
           <div className="rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-4">
-            <p className="text-[12px] leading-relaxed text-ink-500">
-              还没有自定义规则。常见用法举例：
-            </p>
+            <p className="text-[12px] leading-relaxed text-ink-500">还没有自定义规则。常见用法举例：</p>
             <ul className="mt-2 space-y-1 text-[12px] leading-relaxed text-ink-500">
-              <li>· 域名后缀 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">baidu.com</code> → 直连（绕过所有分流，国内服务保直连）</li>
-              <li>· 域名后缀 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">corp.example.com</code> → 走代理（公司内网穿透）</li>
-              <li>· 来源 IP 段 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">192.168.1.100/32</code> → 走代理（让某台设备全部流量走代理）</li>
-              <li>· 域名关键词 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">tracker</code> → 拦截（屏蔽 BT 追踪）</li>
+              <li>
+                · 域名后缀 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">baidu.com</code> →
+                直连（绕过所有分流，国内服务保直连）
+              </li>
+              <li>
+                · 域名后缀 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">corp.example.com</code>{' '}
+                → 走代理（公司内网穿透）
+              </li>
+              <li>
+                · 来源 IP 段{' '}
+                <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">192.168.1.100/32</code> →
+                走代理（让某台设备全部流量走代理）
+              </li>
+              <li>
+                · 域名关键词 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">tracker</code> →
+                拦截（屏蔽 BT 追踪）
+              </li>
             </ul>
           </div>
         ) : (
@@ -443,7 +468,9 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                     <Field label="命中动作" hint={c.target === 'proxy' ? '走代理：送往「🚀 节点选择」' : undefined}>
                       <Select
                         value={c.target}
-                        onChange={(e) => updateCustomRule(c.id, { target: e.target.value as 'proxy' | 'direct' | 'reject' })}
+                        onChange={(e) =>
+                          updateCustomRule(c.id, { target: e.target.value as 'proxy' | 'direct' | 'reject' })
+                        }
                       >
                         <option value="proxy">走代理</option>
                         <option value="direct">直连</option>
@@ -459,8 +486,8 @@ export function RulesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
         {activeRuleCount > 0 && (
           <div className="mt-3">
             <Notice tone="info">
-              当前有 {activeRuleCount} 条自定义规则生效，会按列表顺序排在所有规则集之前；IP 类规则（IP-CIDR / 来源 IP）已自动附加
-              no-resolve，不会触发额外的 DNS 解析。
+              当前有 {activeRuleCount} 条自定义规则生效，会按列表顺序排在所有规则集之前；IP 类规则（IP-CIDR / 来源
+              IP）已自动附加 no-resolve，不会触发额外的 DNS 解析。
             </Notice>
           </div>
         )}

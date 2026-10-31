@@ -26,6 +26,16 @@ export interface ImportReport {
   errors: { line: string; reason: string }[];
 }
 
+/** 已保存的订阅（可一键刷新） */
+export interface SavedSubscription {
+  id: string;
+  name: string;
+  url: string;
+  nodeCount: number;
+  addedAt: number;
+  lastUpdated?: number;
+}
+
 interface AppState {
   nodes: ProxyNode[];
   options: GenerateOptions;
@@ -33,6 +43,7 @@ interface AppState {
   routerOs: RouterOsProfile;
   library: SavedConfig[];
   savedNodes: ProxyNode[];
+  subscriptions: SavedSubscription[];
   lastImport: ImportReport | null;
 
   addNodes: (list: ProxyNode[]) => number;
@@ -65,6 +76,10 @@ interface AppState {
   saveNodeToVault: (node: ProxyNode) => void;
   removeSavedNode: (id: string) => void;
 
+  addSubscription: (name: string, url: string, nodeCount: number) => void;
+  removeSubscription: (id: string) => void;
+  markSubscriptionUpdated: (id: string, nodeCount: number) => void;
+
   resetAll: () => void;
 }
 
@@ -76,6 +91,7 @@ export const useStore = create<AppState>()(
       routerOs: defaultRouterOsProfile(),
       library: [],
       savedNodes: [],
+      subscriptions: [],
       lastImport: null,
 
       addNodes: (list) => {
@@ -84,8 +100,7 @@ export const useStore = create<AppState>()(
         return merged.length - get().nodes.length;
       },
       replaceNodes: (list) => set({ nodes: dedupe(list) }),
-      updateNode: (id, patch) =>
-        set({ nodes: get().nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }),
+      updateNode: (id, patch) => set({ nodes: get().nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }),
       removeNode: (id) => set({ nodes: get().nodes.filter((n) => n.id !== id) }),
       removeNodes: (ids) => set({ nodes: get().nodes.filter((n) => !ids.includes(n.id)) }),
       clearNodes: () => set({ nodes: [] }),
@@ -96,8 +111,7 @@ export const useStore = create<AppState>()(
         else set({ nodes: dedupe([...get().nodes, ...nodes]), lastImport: report });
         return report;
       },
-      setNodeEnabled: (id, enabled) =>
-        set({ nodes: get().nodes.map((n) => (n.id === id ? { ...n, enabled } : n)) }),
+      setNodeEnabled: (id, enabled) => set({ nodes: get().nodes.map((n) => (n.id === id ? { ...n, enabled } : n)) }),
       setAllEnabled: (enabled) => set({ nodes: get().nodes.map((n) => ({ ...n, enabled })) }),
 
       setOptions: (patch) => set({ options: { ...get().options, ...patch } }),
@@ -214,6 +228,23 @@ export const useStore = create<AppState>()(
       },
       removeSavedNode: (id) => set({ savedNodes: get().savedNodes.filter((n) => n.id !== id) }),
 
+      addSubscription: (name, url, nodeCount) => {
+        if (get().subscriptions.some((s) => s.url === url)) return;
+        set({
+          subscriptions: [
+            { id: `sub_${newNodeId()}`, name, url, nodeCount, addedAt: Date.now(), lastUpdated: Date.now() },
+            ...get().subscriptions,
+          ],
+        });
+      },
+      removeSubscription: (id) => set({ subscriptions: get().subscriptions.filter((s) => s.id !== id) }),
+      markSubscriptionUpdated: (id, nodeCount) =>
+        set({
+          subscriptions: get().subscriptions.map((s) =>
+            s.id === id ? { ...s, lastUpdated: Date.now(), nodeCount } : s,
+          ),
+        }),
+
       resetAll: () => set({ nodes: [], options: defaultOptions(), lastImport: null }),
     }),
     {
@@ -237,6 +268,7 @@ export const useStore = create<AppState>()(
         routerOs: s.routerOs,
         library: s.library,
         savedNodes: s.savedNodes,
+        subscriptions: s.subscriptions,
       }),
     },
   ),

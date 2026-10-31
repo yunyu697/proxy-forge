@@ -317,15 +317,15 @@ export function buildMihomo(nodes: ProxyNode[], options: GenerateOptions, plan: 
     loader: isRouter ? 'memconservative' : 'standard',
   };
   cfg['geox-url'] = {
-    geoip: options.mirror === 'raw'
-      ? 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat'
-      : 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat',
+    geoip:
+      options.mirror === 'raw'
+        ? 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat'
+        : 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat',
     geosite: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat',
     mmdb: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb',
     asn: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb',
   };
-  cfg['external-ui-url'] =
-    'https://testingcf.jsdelivr.net/gh/MetaCubeX/Yacd-meta@gh-pages';
+  cfg['external-ui-url'] = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/Yacd-meta@gh-pages';
 
   /* ---------------------------- 节点与策略组 ---------------------------- */
   const active = nodes.filter((n) => n.enabled);
@@ -354,10 +354,7 @@ export function buildMihomo(nodes: ProxyNode[], options: GenerateOptions, plan: 
     groups.push({
       name: g.label,
       type: g.type === 'urltest' ? 'urltest' : 'select',
-      proxies:
-        g.type === 'urltest'
-          ? [...proxyNames]
-          : ['🚀 节点选择', ...proxyNames, 'DIRECT'],
+      proxies: g.type === 'urltest' ? [...proxyNames] : ['🚀 节点选择', ...proxyNames, 'DIRECT'],
       url: g.type === 'urltest' ? options.urlTestUrl : undefined,
       interval: g.type === 'urltest' ? options.urlTestInterval : undefined,
       tolerance: g.type === 'urltest' ? 50 : undefined,
@@ -432,7 +429,9 @@ function header(options: GenerateOptions, plan: ConfigPlan): string {
   lines.push('# ============================================================');
   lines.push('# 由「代理工坊 ProxyForge」生成 · mihomo (Clash.Meta)');
   lines.push(`# 设备形态：${deviceName(options.device)}   分流策略：${strategyName(options.strategy)}`);
-  lines.push(`# 节点 ${plan.nodeCount} 个    规则集 ${plan.ruleSets.length} 套    生成时间 ${new Date().toLocaleString('zh-CN')}`);
+  lines.push(
+    `# 节点 ${plan.nodeCount} 个    规则集 ${plan.ruleSets.length} 套    生成时间 ${new Date().toLocaleString('zh-CN')}`,
+  );
   lines.push('# ============================================================');
   lines.push('#');
   if (options.device === 'client') {
@@ -445,7 +444,9 @@ function header(options: GenerateOptions, plan: ConfigPlan): string {
     if (options.enableTun) {
       lines.push('#   2) TUN 已开启并自动劫持 53 端口 DNS，局域网设备把网关与 DNS 指向本机即可；');
     } else {
-      lines.push(`#   2) 已开启 redir-port ${7892} 与 tproxy-port ${7893}，需要配合 nftables/iptables 规则做透明代理；`);
+      lines.push(
+        `#   2) 已开启 redir-port ${7892} 与 tproxy-port ${7893}，需要配合 nftables/iptables 规则做透明代理；`,
+      );
       lines.push('#      同时请把 dnsmasq 的上游设为 127.0.0.1:1053 或劫持 53 端口到本机。');
     }
     lines.push(`#   3) 控制面板已监听 0.0.0.0:${options.controllerPort}，可从局域网访问。`);

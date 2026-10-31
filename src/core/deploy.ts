@@ -139,9 +139,7 @@ function guideOpenWrtSidecar(options: GenerateOptions): RouterGuide {
       '仅 DNS 模式（仅 mihomo）：主路由防火墙把全网 53 转发到 旁路由IP:1053，网关保持主路由。sing-box 无独立 DNS 监听，不支持此模式。',
       '旁路由必须在主路由同网段且能直连外网；建议旁路由网关仍指向主路由、DNS 指向自己（内核自行分流）。',
     ],
-    notes: [
-      'LAN 互访、打印机等本地服务依赖「局域网直连」规则（本工具默认开启 bypassLan），无需在主路由上额外放行。',
-    ],
+    notes: ['LAN 互访、打印机等本地服务依赖「局域网直连」规则（本工具默认开启 bypassLan），无需在主路由上额外放行。'],
   };
 }
 
@@ -163,7 +161,7 @@ function guideMerlin(options: GenerateOptions): RouterGuide {
         title: 'SSH：dnsmasq.postconf 转发到内核 DNS',
         lang: 'bash',
         content: [
-          'cat >> /jffs/scripts/dnsmasq.postconf <<\'EOF\'',
+          "cat >> /jffs/scripts/dnsmasq.postconf <<'EOF'",
           'server=/#/127.0.0.1#1053',
           'no-resolv',
           'EOF',
@@ -298,7 +296,7 @@ function ipInCidr(ip: string, cidr: string): boolean {
   const n = ipToInt(ip);
   if (!p || n === null) return false;
   const mask = p.bits === 0 ? 0 : (0xffffffff << (32 - p.bits)) >>> 0;
-  return ((n & mask) >>> 0) === p.net;
+  return (n & mask) >>> 0 === p.net;
 }
 
 /** 校验引导表单：errors 会阻止下载，warns 仅提示 */
@@ -317,7 +315,9 @@ export function validateProfile(
     issues.push({
       level: 'error',
       field: proxyField,
-      message: onRouter ? '主路由 IP 必填：本机容器部署时 DNS 劫持目标就是它。' : '代理设备 IP 必填：脚本需要它做豁免与转发目标。',
+      message: onRouter
+        ? '主路由 IP 必填：本机容器部署时 DNS 劫持目标就是它。'
+        : '代理设备 IP 必填：脚本需要它做豁免与转发目标。',
     });
   } else if (!isValidIpv4(proxyIp)) {
     issues.push({ level: 'error', field: proxyField, message: 'IP 不是合法的 IPv4 地址。' });
@@ -334,7 +334,8 @@ export function validateProfile(
     issues.push({
       level: 'error',
       field: 'proxyIp',
-      message: '代理设备 IP 与主路由 IP 相同：代理内核应跑在独立设备或容器里，否则 DNS 劫持会形成回环。若内核确实跑在 RouterOS 本机，请把「内核运行位置」切换为「RouterOS 本机（容器）」。',
+      message:
+        '代理设备 IP 与主路由 IP 相同：代理内核应跑在独立设备或容器里，否则 DNS 劫持会形成回环。若内核确实跑在 RouterOS 本机，请把「内核运行位置」切换为「RouterOS 本机（容器）」。',
     });
   }
   if (isValidIpv4(proxyIp) && parseCidr(profile.lanSubnet) && !ipInCidr(proxyIp, profile.lanSubnet)) {
@@ -345,7 +346,11 @@ export function validateProfile(
     });
   }
   if (isValidIpv4(profile.routerIp) && parseCidr(profile.lanSubnet) && !ipInCidr(profile.routerIp, profile.lanSubnet)) {
-    issues.push({ level: 'error', field: 'routerIp', message: `主路由 ${profile.routerIp} 不在 LAN 网段 ${profile.lanSubnet} 内。` });
+    issues.push({
+      level: 'error',
+      field: 'routerIp',
+      message: `主路由 ${profile.routerIp} 不在 LAN 网段 ${profile.lanSubnet} 内。`,
+    });
   }
 
   // 本机容器部署：53 劫持必须限定 LAN 入接口，否则容器自身查询会回环
@@ -362,7 +367,11 @@ export function validateProfile(
   const poolMatch = pool.match(/^(\d{1,3}(?:\.\d{1,3}){3})-(\d{1,3}(?:\.\d{1,3}){3})$/);
   if (mode === 'full') {
     if (!poolMatch) {
-      issues.push({ level: 'error', field: 'dhcpPool', message: 'DHCP 地址池格式应为 起-止，如 192.168.88.100-192.168.88.200。' });
+      issues.push({
+        level: 'error',
+        field: 'dhcpPool',
+        message: 'DHCP 地址池格式应为 起-止，如 192.168.88.100-192.168.88.200。',
+      });
     } else if (parseCidr(profile.lanSubnet)) {
       for (const bound of [poolMatch[1], poolMatch[2]]) {
         if (!ipInCidr(bound, profile.lanSubnet)) {
@@ -385,7 +394,11 @@ export function validateProfile(
       }
     }
     if (profile.wanType === 'pppoe' && !profile.pppoeUser.trim()) {
-      issues.push({ level: 'warn', field: 'pppoeUser', message: 'PPPoE 账号未填写，脚本中保留了占位符「宽带账号」，导入前请修改。' });
+      issues.push({
+        level: 'warn',
+        field: 'pppoeUser',
+        message: 'PPPoE 账号未填写，脚本中保留了占位符「宽带账号」，导入前请修改。',
+      });
     }
     if (profile.wanType === 'static' && !profile.staticWan.trim()) {
       issues.push({ level: 'error', field: 'staticWan', message: '静态 WAN 需要填写 IP/掩码，如 10.0.0.2/24。' });
@@ -405,7 +418,8 @@ export function validateProfile(
     issues.push({
       level: 'warn',
       field: 'fullTakeover',
-      message: 'mihomo 未开 TUN 时走 tproxy/redir，网关模式下客户端 TCP 可被承接，但 UDP（游戏、QUIC）在 redir 下不可用；建议开启 TUN。',
+      message:
+        'mihomo 未开 TUN 时走 tproxy/redir，网关模式下客户端 TCP 可被承接，但 UDP（游戏、QUIC）在 redir 下不可用；建议开启 TUN。',
     });
   }
   return issues;
@@ -418,7 +432,10 @@ function effectiveIp(options: GenerateOptions): string {
 }
 
 /** 53 端口劫持 + DHCP 调整 + 可选看护（增量与全量共用；区分旁路由 / 本机容器两种拓扑） */
-function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile): { lines: string[]; warnings: string[] } {
+function routerOsProxyBlock(
+  options: GenerateOptions,
+  profile: RouterOsProfile,
+): { lines: string[]; warnings: string[] } {
   const onRouter = profile.topology === 'onRouter';
   const ip = onRouter ? profile.routerIp || '192.168.88.1' : effectiveIp(options);
   const warnings: string[] = [];
@@ -457,11 +474,15 @@ function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile):
     lines.push(`add list=proxyforge-bypass address=${ip} comment="ProxyForge: proxy device self bypass"`);
   }
   // 豁免 Fake-IP 网段被误处理（仅提示性，RouterOS 默认不会路由该网段，交给网关）
-  lines.push('add list=proxyforge-bypass address=198.18.0.0/15 comment="ProxyForge: fake-ip range (handled by proxy gateway)"');
+  lines.push(
+    'add list=proxyforge-bypass address=198.18.0.0/15 comment="ProxyForge: fake-ip range (handled by proxy gateway)"',
+  );
   if (onRouter) {
     lines.push('');
     lines.push('# 本机容器部署的回环防护：53 劫持规则用 in-interface 限定 LAN 桥，');
-    lines.push(`# 容器（veth 接口）发出的查询不会命中 dst-nat。请确认下方接口名 "${profile.lanInterface}" 是实际 LAN 桥名。`);
+    lines.push(
+      `# 容器（veth 接口）发出的查询不会命中 dst-nat。请确认下方接口名 "${profile.lanInterface}" 是实际 LAN 桥名。`,
+    );
   }
 
   // 2) DNS 接管
@@ -490,7 +511,9 @@ function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile):
       lines.push('# sing-box 跑在 RouterOS 容器内时，客户端 53 查询终止于 RouterOS 自身，容器 TUN 无法接管；');
       lines.push('# 需要内核额外提供 53 端口 DNS 入站。本工具生成的 sing-box 配置不含该入站，强烈建议：');
       lines.push('# 改用独立旁路由部署 sing-box，或本机部署改用 mihomo。');
-      warnings.push('sing-box + RouterOS 本机容器拓扑无法可靠接管 DNS（无独立 DNS 监听 + 容器 TUN 受限），建议改用 mihomo 或独立旁路由。');
+      warnings.push(
+        'sing-box + RouterOS 本机容器拓扑无法可靠接管 DNS（无独立 DNS 监听 + 容器 TUN 受限），建议改用 mihomo 或独立旁路由。',
+      );
     } else {
       lines.push('# sing-box 必须使用网关模式：客户端网关与 DNS 都指向代理设备，');
       lines.push('# 53 端口查询随流量进入 TUN/tproxy 后由 hijack-dns 规则自动接管。');
@@ -512,13 +535,17 @@ function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile):
     lines.push(':if ([:len [find address="' + profile.lanSubnet + '"]] > 0) do={');
     lines.push(`  set [find address="${profile.lanSubnet}"] gateway=${ip} dns-server=${ip}`);
     lines.push('} else={');
-    lines.push(`  add address=${profile.lanSubnet} gateway=${ip} dns-server=${ip} comment="ProxyForge: via proxy gateway"`);
+    lines.push(
+      `  add address=${profile.lanSubnet} gateway=${ip} dns-server=${ip} comment="ProxyForge: via proxy gateway"`,
+    );
     lines.push('}');
   } else if (dnsOnly) {
     lines.push(':if ([:len [find address="' + profile.lanSubnet + '"]] > 0) do={');
     lines.push(`  set [find address="${profile.lanSubnet}"] dns-server=${ip}`);
     lines.push('} else={');
-    lines.push(`  add address=${profile.lanSubnet} gateway=${profile.routerIp} dns-server=${ip} comment="ProxyForge: dns only"`);
+    lines.push(
+      `  add address=${profile.lanSubnet} gateway=${profile.routerIp} dns-server=${ip} comment="ProxyForge: dns only"`,
+    );
     lines.push('}');
   } else {
     // 劫持模式 / 本机容器：DNS 由劫持保证，DHCP 无需改动
@@ -538,7 +565,9 @@ function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile):
     lines.push(`#   up-script="/ip firewall nat set [find comment~\\"ProxyForge: DNS\\"] disabled=no"`);
   } else if (gatewayMode) {
     lines.push('');
-    lines.push('# 注意：网关模式下代理设备离线 = 全网上不了外网。建议在代理设备上配置 systemd 开机自启与崩溃自动拉起，');
+    lines.push(
+      '# 注意：网关模式下代理设备离线 = 全网上不了外网。建议在代理设备上配置 systemd 开机自启与崩溃自动拉起，',
+    );
     lines.push('# 或准备回滚：把下方 DHCP 的 gateway/dns 改回主路由 ' + profile.routerIp + ' 即可恢复。');
   } else if (onRouter) {
     lines.push('');
@@ -559,7 +588,9 @@ function routerOsProxyBlock(options: GenerateOptions, profile: RouterOsProfile):
   lines.push('');
   lines.push('# 校验：客户端 nslookup baidu.com 应返回真实 IP；');
   lines.push('# nslookup google.com 返回 198.18.x.x 属 Fake-IP 正常现象。');
-  lines.push(`# 若需回滚：/ip firewall nat remove [find comment~"ProxyForge"]；/ip firewall address-list remove [find list=proxyforge-bypass]`);
+  lines.push(
+    `# 若需回滚：/ip firewall nat remove [find comment~"ProxyForge"]；/ip firewall address-list remove [find list=proxyforge-bypass]`,
+  );
   return { lines, warnings };
 }
 
@@ -626,14 +657,18 @@ export function buildRouterOsScript(
   lines.push('/interface bridge port');
   lines.push(`add bridge=${profile.lanInterface} interface=ether2`);
   lines.push('/ip address');
-  lines.push(`add address=${profile.routerIp}/${profile.lanSubnet.split('/')[1] || '24'} interface=${profile.lanInterface}`);
+  lines.push(
+    `add address=${profile.routerIp}/${profile.lanSubnet.split('/')[1] || '24'} interface=${profile.lanInterface}`,
+  );
   lines.push('/ip pool');
   lines.push(`add name=proxyforge-pool ranges=${profile.dhcpPool}`);
   lines.push('/ip dhcp-server');
   lines.push(`add name=proxyforge-dhcp interface=${profile.lanInterface} address-pool=proxyforge-pool disabled=no`);
   lines.push('/ip dhcp-server network');
   const gwLine = gatewayMode ? ip : profile.routerIp;
-  lines.push(`add address=${profile.lanSubnet} gateway=${gwLine} dns-server=${ip} comment="ProxyForge: DNS -> proxy device"`);
+  lines.push(
+    `add address=${profile.lanSubnet} gateway=${gwLine} dns-server=${ip} comment="ProxyForge: DNS -> proxy device"`,
+  );
   lines.push('/ip firewall nat');
   lines.push(`add chain=srcnat out-interface=${profile.wanInterface} action=masquerade comment="ProxyForge: WAN NAT"`);
   lines.push('');
@@ -661,17 +696,20 @@ export function preFlightChecklist(options: GenerateOptions, profile: RouterOsPr
     {
       level: 'must',
       title: '在 Safe Mode 下应用配置',
-      detail: '终端里先按 Ctrl-X 进入 Safe Mode 再粘贴/导入脚本：一旦 3 分钟内失去连接（比如把自己踢下线），配置会自动回滚。这是防「改完路由器进不去」的第一保命符。',
+      detail:
+        '终端里先按 Ctrl-X 进入 Safe Mode 再粘贴/导入脚本：一旦 3 分钟内失去连接（比如把自己踢下线），配置会自动回滚。这是防「改完路由器进不去」的第一保命符。',
     },
     {
       level: 'must',
       title: '先备份再动手',
-      detail: '执行 /export hide-sensitive file=before-proxyforge 导出当前配置、/system backup save name=before-proxyforge 做二制备份。出问题时 /import 恢复或回滚命令见脚本尾部注释。',
+      detail:
+        '执行 /export hide-sensitive file=before-proxyforge 导出当前配置、/system backup save name=before-proxyforge 做二制备份。出问题时 /import 恢复或回滚命令见脚本尾部注释。',
     },
     {
       level: 'must',
       title: '确认豁免列表包含代理设备自身',
-      detail: '53 端口劫持规则必须排除代理设备 IP（脚本已内置 proxyforge-bypass 地址列表）。若你在代理设备上又指了网关到主路由，缺了这条会形成 DNS 死循环，全网解析失败。',
+      detail:
+        '53 端口劫持规则必须排除代理设备 IP（脚本已内置 proxyforge-bypass 地址列表）。若你在代理设备上又指了网关到主路由，缺了这条会形成 DNS 死循环，全网解析失败。',
     },
   ];
 
@@ -679,7 +717,8 @@ export function preFlightChecklist(options: GenerateOptions, profile: RouterOsPr
     items.push({
       level: 'must',
       title: '网关模式下代理设备必须高可用',
-      detail: '所有客户端的网关都指向代理设备：它一离线，全网断外网。请给内核配置开机自启（systemd / OpenWrt init）与崩溃自动重启；临时恢复方法是把 DHCP 网关改回主路由。',
+      detail:
+        '所有客户端的网关都指向代理设备：它一离线，全网断外网。请给内核配置开机自启（systemd / OpenWrt init）与崩溃自动重启；临时恢复方法是把 DHCP 网关改回主路由。',
     });
   }
   if (profile.topology === 'onRouter') {
@@ -687,17 +726,20 @@ export function preFlightChecklist(options: GenerateOptions, profile: RouterOsPr
       {
         level: 'must',
         title: '确认 RouterOS 容器环境可用',
-        detail: '本机部署需要 RouterOS v7 + container 软件包：先在 /system/device-mode update container=yes 开启容器模式（需重启或按 reset 键确认），再建 veth 接口挂给容器。架构需为 arm/arm64/x86_64。',
+        detail:
+          '本机部署需要 RouterOS v7 + container 软件包：先在 /system/device-mode update container=yes 开启容器模式（需重启或按 reset 键确认），再建 veth 接口挂给容器。架构需为 arm/arm64/x86_64。',
       },
       {
         level: 'should',
         title: '内核监听与容器回环',
-        detail: '容器内的 mihomo 要监听 0.0.0.0:1053（本工具生成的配置已内置）；53 劫持规则用 in-interface 限定 LAN 桥，容器自身（veth）的查询不会命中规则，因此不会回环。LAN 桥名填错时劫持会静默失效——导入后务必用 nslookup 验证。',
+        detail:
+          '容器内的 mihomo 要监听 0.0.0.0:1053（本工具生成的配置已内置）；53 劫持规则用 in-interface 限定 LAN 桥，容器自身（veth）的查询不会命中规则，因此不会回环。LAN 桥名填错时劫持会静默失效——导入后务必用 nslookup 验证。',
       },
       {
         level: 'info',
         title: '容器 TUN 的限制',
-        detail: '容器内开 TUN 需要 /dev/net/tun 透传，RouterOS 对此支持有限；本机部署建议 mihomo + TPROXY 或仅 DNS 劫持模式。sing-box 建议放独立旁路由跑。',
+        detail:
+          '容器内开 TUN 需要 /dev/net/tun 透传，RouterOS 对此支持有限；本机部署建议 mihomo + TPROXY 或仅 DNS 劫持模式。sing-box 建议放独立旁路由跑。',
       },
     );
   }
@@ -705,41 +747,48 @@ export function preFlightChecklist(options: GenerateOptions, profile: RouterOsPr
     items.push({
       level: 'should',
       title: '「仅 DHCP 下发 DNS」的盲区',
-      detail: '手动设置了 DNS 的客户端（写死 8.8.8.8 等）不会被接管。想强制覆盖所有设备，改用「53 劫持」策略即可，无需动客户端。',
+      detail:
+        '手动设置了 DNS 的客户端（写死 8.8.8.8 等）不会被接管。想强制覆盖所有设备，改用「53 劫持」策略即可，无需动客户端。',
     });
   }
   items.push(
     {
       level: 'should',
       title: '静态 IP 客户端单独处理',
-      detail: 'DHCP 修改只影响自动获取的设备。网关模式下请把静态设备的网关/DNS 也指向代理设备；劫持模式下静态设备会被 53 劫持自动覆盖 DNS，但网关仍需在网关模式时手动改。',
+      detail:
+        'DHCP 修改只影响自动获取的设备。网关模式下请把静态设备的网关/DNS 也指向代理设备；劫持模式下静态设备会被 53 劫持自动覆盖 DNS，但网关仍需在网关模式时手动改。',
     },
     {
       level: 'should',
       title: 'IPv6 旁路',
-      detail: '若路由器通过 RA 下发 IPv6 DNS，双栈客户端可能优先走 IPv6 解析而绕过接管：关闭 RA 的 RDNSS，或让代理配置覆盖 IPv6（本工具默认关闭 IPv6）。',
+      detail:
+        '若路由器通过 RA 下发 IPv6 DNS，双栈客户端可能优先走 IPv6 解析而绕过接管：关闭 RA 的 RDNSS，或让代理配置覆盖 IPv6（本工具默认关闭 IPv6）。',
     },
     {
       level: 'should',
       title: '避免双重 NAT 叠加',
-      detail: '光猫是路由模式时，主路由 WAN 是私网地址：DNS 劫持仍有效，但端口回源、游戏联机会受影响。有条件把光猫改桥接、主路由拨号。',
+      detail:
+        '光猫是路由模式时，主路由 WAN 是私网地址：DNS 劫持仍有效，但端口回源、游戏联机会受影响。有条件把光猫改桥接、主路由拨号。',
     },
     {
       level: 'info',
       title: '应用后先验证再扩散',
-      detail: '先用一台设备改 DNS/网关验证：nslookup 国外域名返回 198.18.x.x（Fake-IP 正常）、国内域名返回真实 IP、直连网段互访正常，然后再改 DHCP 全网生效。',
+      detail:
+        '先用一台设备改 DNS/网关验证：nslookup 国外域名返回 198.18.x.x（Fake-IP 正常）、国内域名返回真实 IP、直连网段互访正常，然后再改 DHCP 全网生效。',
     },
     {
       level: 'info',
       title: '客户端缓存刷新',
-      detail: '切换 DNS 方案后，客户端可能缓存了旧解析或 Fake-IP：重连 WiFi / ipconfig flushdns 后再判断。RouterOS 侧执行 /ip dns cache flush。',
+      detail:
+        '切换 DNS 方案后，客户端可能缓存了旧解析或 Fake-IP：重连 WiFi / ipconfig flushdns 后再判断。RouterOS 侧执行 /ip dns cache flush。',
     },
   );
   if (options.fakeIp && !options.enableTun) {
     items.push({
       level: 'info',
       title: 'Fake-IP 与主路由缓存',
-      detail: '透明代理模式下若 RouterOS 自身 DNS 服务开着（allow-remote-requests=yes），Fake-IP 可能被它缓存并在内核离线后无法恢复——脚本中已按你的选择关闭该服务或附上清理命令。',
+      detail:
+        '透明代理模式下若 RouterOS 自身 DNS 服务开着（allow-remote-requests=yes），Fake-IP 可能被它缓存并在内核离线后无法恢复——脚本中已按你的选择关闭该服务或附上清理命令。',
     });
   }
   return items;

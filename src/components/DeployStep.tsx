@@ -80,7 +80,9 @@ function GuideAccordion({ guide, defaultOpen }: { guide: RouterGuide; defaultOpe
               </li>
             ))}
           </ol>
-          {guide.commands?.map((c, i) => <CodeBlockView key={i} title={c.title} lang={c.lang} content={c.content} />)}
+          {guide.commands?.map((c, i) => (
+            <CodeBlockView key={i} title={c.title} lang={c.lang} content={c.content} />
+          ))}
           {guide.notes && guide.notes.length > 0 && (
             <div className="mt-3 space-y-1">
               {guide.notes.map((n, i) => (
@@ -272,7 +274,9 @@ function RouterOsBuilder() {
             onClick={() => setRouterOs({ topology: t.id })}
             className={clsx(
               'rounded-lg border px-3 py-2.5 text-left text-[12px] transition',
-              routerOs.topology === t.id ? 'border-brand-400 bg-brand-50/60' : 'border-ink-200 bg-white hover:bg-ink-50',
+              routerOs.topology === t.id
+                ? 'border-brand-400 bg-brand-50/60'
+                : 'border-ink-200 bg-white hover:bg-ink-50',
             )}
           >
             <span className="block font-medium text-ink-800">{t.label}</span>
@@ -283,8 +287,9 @@ function RouterOsBuilder() {
       {onRouter && (
         <div className="mt-2">
           <Notice tone="info">
-            本机容器部署需要 RouterOS v7 + container 软件包（<code>/system/device-mode update container=yes</code> 开启，需重启确认）。
-            53 劫持将指向主路由自身 1053 端口，并用 LAN 接口名做回环防护——<b>接口名必须与实际 LAN 桥一致</b>，否则劫持静默失效。
+            本机容器部署需要 RouterOS v7 + container 软件包（<code>/system/device-mode update container=yes</code>{' '}
+            开启，需重启确认）。 53 劫持将指向主路由自身 1053 端口，并用 LAN 接口名做回环防护——
+            <b>接口名必须与实际 LAN 桥一致</b>，否则劫持静默失效。
             {singbox && ' 另外：sing-box 在容器内无法可靠接管 DNS，强烈建议改用 mihomo 或放独立旁路由。'}
           </Notice>
         </div>
@@ -299,7 +304,12 @@ function RouterOsBuilder() {
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         {!onRouter && (
-          <FieldWithIssues label="代理设备 IP" required issues={issueFor(issues, 'proxyIp')} hint="运行 mihomo / sing-box 的那台设备的局域网 IP（旁路由或容器）">
+          <FieldWithIssues
+            label="代理设备 IP"
+            required
+            issues={issueFor(issues, 'proxyIp')}
+            hint="运行 mihomo / sing-box 的那台设备的局域网 IP（旁路由或容器）"
+          >
             <Input
               className="font-mono"
               placeholder="192.168.88.2"
@@ -308,7 +318,12 @@ function RouterOsBuilder() {
             />
           </FieldWithIssues>
         )}
-        <FieldWithIssues label="主路由 IP（RouterOS）" required issues={issueFor(issues, 'routerIp')} hint={onRouter ? '本机部署时 DNS 劫持目标就是它' : 'RouterOS 自己的 LAN 地址，也是客户端当前的网关'}>
+        <FieldWithIssues
+          label="主路由 IP（RouterOS）"
+          required
+          issues={issueFor(issues, 'routerIp')}
+          hint={onRouter ? '本机部署时 DNS 劫持目标就是它' : 'RouterOS 自己的 LAN 地址，也是客户端当前的网关'}
+        >
           <Input
             className="font-mono"
             placeholder="192.168.88.1"
@@ -316,7 +331,12 @@ function RouterOsBuilder() {
             onChange={(e) => setRouterOs({ routerIp: e.target.value })}
           />
         </FieldWithIssues>
-        <FieldWithIssues label="LAN 网段" required issues={issueFor(issues, 'lanSubnet')} hint="DHCP 修改将精确匹配该网段，不会误伤其它网段">
+        <FieldWithIssues
+          label="LAN 网段"
+          required
+          issues={issueFor(issues, 'lanSubnet')}
+          hint="DHCP 修改将精确匹配该网段，不会误伤其它网段"
+        >
           <Input
             className="font-mono"
             placeholder="192.168.88.0/24"
@@ -350,7 +370,8 @@ function RouterOsBuilder() {
       </p>
       {onRouter ? (
         <Notice tone="info">
-          本机容器部署固定使用「53 劫持到本机 1053」：客户端网关本来就是主路由，无需改动 DHCP，53 查询被防火墙重定向进容器内核。
+          本机容器部署固定使用「53 劫持到本机 1053」：客户端网关本来就是主路由，无需改动 DHCP，53
+          查询被防火墙重定向进容器内核。
         </Notice>
       ) : isMihomo ? (
         <>
@@ -396,8 +417,8 @@ function RouterOsBuilder() {
         </>
       ) : (
         <Notice tone="info">
-          sing-box 没有独立 DNS 监听端口，只能用<b>网关模式</b>：客户端的网关和 DNS 都指向代理设备，53 查询进入 TUN 后由 hijack-dns
-          规则接管（脚本会自动这样配置）。
+          sing-box 没有独立 DNS 监听端口，只能用<b>网关模式</b>：客户端的网关和 DNS 都指向代理设备，53 查询进入 TUN 后由
+          hijack-dns 规则接管（脚本会自动这样配置）。
         </Notice>
       )}
       <div className="mt-2.5 space-y-2">
@@ -433,27 +454,51 @@ function RouterOsBuilder() {
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="WAN 接入方式" hint="上层光猫拨号选 DHCP；直接接运营商选 PPPoE；有固定 IP 选静态">
-              <Select value={routerOs.wanType} onChange={(e) => setRouterOs({ wanType: e.target.value as 'pppoe' | 'dhcp' | 'static' })}>
+              <Select
+                value={routerOs.wanType}
+                onChange={(e) => setRouterOs({ wanType: e.target.value as 'pppoe' | 'dhcp' | 'static' })}
+              >
                 <option value="pppoe">PPPoE 拨号（宽带账号）</option>
                 <option value="dhcp">DHCP 自动获取</option>
                 <option value="static">静态 IP</option>
               </Select>
             </Field>
             <Field label="WAN 接口名" hint="物理口一般是 ether1；PPPoE 会在此名上建立">
-              <Input className="font-mono" value={routerOs.wanInterface} onChange={(e) => setRouterOs({ wanInterface: e.target.value })} />
+              <Input
+                className="font-mono"
+                value={routerOs.wanInterface}
+                onChange={(e) => setRouterOs({ wanInterface: e.target.value })}
+              />
             </Field>
             {routerOs.wanType === 'pppoe' && (
               <>
-                <FieldWithIssues label="宽带账号" issues={issueFor(issues, 'pppoeUser')} hint="运营商提供的 PPPoE 用户名">
-                  <Input value={routerOs.pppoeUser} onChange={(e) => setRouterOs({ pppoeUser: e.target.value })} placeholder="填了才不用导入后手改" />
+                <FieldWithIssues
+                  label="宽带账号"
+                  issues={issueFor(issues, 'pppoeUser')}
+                  hint="运营商提供的 PPPoE 用户名"
+                >
+                  <Input
+                    value={routerOs.pppoeUser}
+                    onChange={(e) => setRouterOs({ pppoeUser: e.target.value })}
+                    placeholder="填了才不用导入后手改"
+                  />
                 </FieldWithIssues>
                 <Field label="宽带密码">
-                  <Input type="password" value={routerOs.pppoePass} onChange={(e) => setRouterOs({ pppoePass: e.target.value })} />
+                  <Input
+                    type="password"
+                    value={routerOs.pppoePass}
+                    onChange={(e) => setRouterOs({ pppoePass: e.target.value })}
+                  />
                 </Field>
               </>
             )}
             {routerOs.wanType === 'static' && (
-              <FieldWithIssues label="WAN 静态 IP/掩码" required issues={issueFor(issues, 'staticWan')} hint="如 10.0.0.2/24，网关在导入后替换脚本占位符">
+              <FieldWithIssues
+                label="WAN 静态 IP/掩码"
+                required
+                issues={issueFor(issues, 'staticWan')}
+                hint="如 10.0.0.2/24，网关在导入后替换脚本占位符"
+              >
                 <Input
                   className="font-mono"
                   placeholder="10.0.0.2/24"
@@ -466,10 +511,18 @@ function RouterOsBuilder() {
               {onRouter ? (
                 <Input className="font-mono bg-ink-50" value={routerOs.lanInterface} disabled />
               ) : (
-                <Input className="font-mono" value={routerOs.lanInterface} onChange={(e) => setRouterOs({ lanInterface: e.target.value })} />
+                <Input
+                  className="font-mono"
+                  value={routerOs.lanInterface}
+                  onChange={(e) => setRouterOs({ lanInterface: e.target.value })}
+                />
               )}
             </Field>
-            <FieldWithIssues label="DHCP 地址池" issues={issueFor(issues, 'dhcpPool')} hint="起始-结束；脚本会检查代理设备 IP 是否落在池内">
+            <FieldWithIssues
+              label="DHCP 地址池"
+              issues={issueFor(issues, 'dhcpPool')}
+              hint="起始-结束；脚本会检查代理设备 IP 是否落在池内"
+            >
               <Input
                 className="font-mono"
                 placeholder="192.168.88.100-192.168.88.200"
@@ -532,7 +585,8 @@ function RouterOsBuilder() {
       <div className="mt-3">
         <Notice tone="info">
           相容性已内置：53 劫持排除代理设备/自身（防回环）与 Fake-IP 网段；旁路由拓扑用源地址豁免、本机容器拓扑用 LAN
-          接口限定（容器查询不回环）；DHCP 按 LAN 网段精确匹配（有注释标记，回滚一条命令）；网关模式附离线风险与恢复说明；脚本尾部附完整回滚命令。
+          接口限定（容器查询不回环）；DHCP 按 LAN
+          网段精确匹配（有注释标记，回滚一条命令）；网关模式附离线风险与恢复说明；脚本尾部附完整回滚命令。
         </Notice>
       </div>
     </Card>
@@ -552,7 +606,11 @@ export function DeployStep({ onPrev }: { onPrev?: () => void }) {
     <div className="space-y-5">
       {!isGateway && (
         <Card className="p-5">
-          <SectionTitle icon="router" title="部署与 DNS" desc="客户端模式无需配置路由器，以下内容供以后切换到网关部署时参考。" />
+          <SectionTitle
+            icon="router"
+            title="部署与 DNS"
+            desc="客户端模式无需配置路由器，以下内容供以后切换到网关部署时参考。"
+          />
           <Notice tone="info">
             当前为客户端模式：TUN + Fake-IP 在本机完成全部接管，DNS 查询由内核直接处理，局域网其他设备不受影响。
             如果以后要做「旁路由 / 主路由」部署，回到「设备形态」切换后，本页会给出完整的 DNS 劫持与路由器配置指南。

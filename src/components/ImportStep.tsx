@@ -3,17 +3,23 @@ import { useStore } from '../store/useStore';
 import { Button, Card, Chip, Icon, Input, Notice, SectionTitle, StepFooter, TextArea } from './ui';
 import { PROXY_TYPE_LABELS } from '../core/types';
 import { NodeEditor } from './NodeEditor';
+import { isTauri } from '../desktop';
 
 export function ImportStep({ onNext }: { onNext: () => void }) {
   const nodes = useStore((s) => s.nodes);
   const importText = useStore((s) => s.importText);
   const lastImport = useStore((s) => s.lastImport);
+  const subscriptions = useStore((s) => s.subscriptions);
+  const addSubscription = useStore((s) => s.addSubscription);
+  const removeSubscription = useStore((s) => s.removeSubscription);
+  const markSubscriptionUpdated = useStore((s) => s.markSubscriptionUpdated);
   const [text, setText] = useState('');
   const [subUrl, setSubUrl] = useState('');
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState('');
   const [editing, setEditing] = useState(false);
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   const doImport = () => {
     if (!text.trim()) return;
@@ -21,22 +27,45 @@ export function ImportStep({ onNext }: { onNext: () => void }) {
     setText('');
   };
 
+  const pullUrl = async (url: string): Promise<number> => {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.text();
+    const report = importText(raw, false);
+    if (report.added === 0) throw new Error('订阅内容里没有识别出可用节点');
+    return report.added;
+  };
+
   const fetchSubscription = async () => {
     if (!subUrl.trim()) return;
     setSubLoading(true);
     setSubError('');
     try {
-      const res = await fetch(subUrl.trim(), { redirect: 'follow' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.text();
-      const report = importText(raw, false);
-      if (report.added === 0) setSubError('订阅内容里没有识别出可用节点，请确认链接或改用粘贴方式导入。');
+      const added = await pullUrl(subUrl.trim());
+      // 已保存的同 URL 订阅顺带刷新时间；新 URL 提供一键保存
+      const saved = subscriptions.find((s) => s.url === subUrl.trim());
+      if (saved) markSubscriptionUpdated(saved.id, added);
     } catch (e) {
       setSubError(
         `订阅拉取失败：${(e as Error).message}。浏览器环境的跨域限制可能导致失败，可改用桌面版（Tauri）或把订阅内容粘贴到下方文本框。`,
       );
     } finally {
       setSubLoading(false);
+    }
+  };
+
+  const refreshSubscription = async (id: string, url: string) => {
+    setRefreshingId(id);
+    setSubError('');
+    try {
+      const added = await pullUrl(url);
+      markSubscriptionUpdated(id, added);
+    } catch (e) {
+      setSubError(
+        `订阅刷新失败：${(e as Error).message}${isTauri() ? '' : '（浏览器跨域限制可能是原因，建议用桌面版）'}`,
+      );
+    } finally {
+      setRefreshingId(null);
     }
   };
 
@@ -71,6 +100,55 @@ export function ImportStep({ onNext }: { onNext: () => void }) {
         {subError && (
           <div className="mt-3">
             <Notice tone="warn">{subError}</Notice>
+          </div>
+        )}
+        {subUrl.trim() && !subLoading && !subscriptions.some((s) => s.url === subUrl.trim()) && (
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              icon="save"
+              onClick={() =>
+                addSubscription(subUrl.split('//')[1]?.slice(0, 18) || '我的订阅', subUrl.trim(), nodes.length)
+              }
+            >
+              保存订阅，之后一键刷新
+            </Button>
+          </div>
+        )}
+
+        {subscriptions.length > 0 && (
+          <div className="mt-4 space-y-1.5">
+            <p className="label">已保存的订阅</p>
+            {subscriptions.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg border border-ink-200 bg-white px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-ink-800">{s.name}</div>
+                  <div className="truncate font-mono text-[11px] text-ink-400">{s.url}</div>
+                  {s.lastUpdated && (
+                    <div className="mt-0.5 text-[11px] text-ink-400">
+                      上次更新 {new Date(s.lastUpdated).toLocaleString('zh-CN')} · {s.nodeCount} 个节点
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={refreshingId === s.id ? 'refresh' : 'refresh'}
+                  disabled={refreshingId === s.id}
+                  onClick={() => refreshSubscription(s.id, s.url)}
+                >
+                  {refreshingId === s.id ? '刷新中' : '刷新'}
+                </Button>
+                <button
+                  className="btn-ghost p-1.5 text-ink-400 hover:text-red-600"
+                  title="删除订阅"
+                  onClick={() => removeSubscription(s.id)}
+                >
+                  <Icon name="trash" size={14} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </Card>
@@ -119,7 +197,14 @@ export function ImportStep({ onNext }: { onNext: () => void }) {
         <Notice tone={lastImport.errors.length ? 'warn' : 'info'}>
           本次解析到 <b>{lastImport.added}</b> 个节点。
           {lastImport.errors.length > 0 && (
-            <>有 {lastImport.errors.length} 行无法识别：{lastImport.errors.slice(0, 3).map((e) => e.reason).join('；')}…</>
+            <>
+              有 {lastImport.errors.length} 行无法识别：
+              {lastImport.errors
+                .slice(0, 3)
+                .map((e) => e.reason)
+                .join('；')}
+              …
+            </>
           )}
         </Notice>
       )}

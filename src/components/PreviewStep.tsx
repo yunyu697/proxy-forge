@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { Button, Card, Chip, EmptyState, Icon, Input, Notice, SectionTitle, StepFooter } from './ui';
 import { generateConfig } from '../core/generator';
 import { DEVICE_PROFILES } from '../core/types';
+import { isTauri, saveTextFile } from '../desktop';
 
 function download(filename: string, content: string) {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -25,6 +26,7 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
   const [copied, setCopied] = useState(false);
   const [name, setName] = useState('');
   const [savedTip, setSavedTip] = useState('');
+  const [fileTip, setFileTip] = useState('');
 
   const result = useMemo(() => generateConfig(nodes, options), [nodes, options]);
   const activeNodes = nodes.filter((n) => n.enabled);
@@ -40,8 +42,19 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
     }
   };
 
+  const saveToDisk = async () => {
+    try {
+      const written = await saveTextFile(filename, result.content);
+      setFileTip(written ? `已写入 ${written}` : '');
+    } catch (e) {
+      setFileTip(`保存失败：${(e as Error).message}`);
+    }
+    setTimeout(() => setFileTip(''), 4000);
+  };
+
   const doSave = () => {
-    const finalName = name.trim() || `${options.core === 'mihomo' ? 'mihomo' : 'sing-box'}-${new Date().toLocaleDateString('zh-CN')}`;
+    const finalName =
+      name.trim() || `${options.core === 'mihomo' ? 'mihomo' : 'sing-box'}-${new Date().toLocaleDateString('zh-CN')}`;
     saveConfig(finalName, result.content, activeNodes.length, result.plan.ruleSets.length);
     setName('');
     setSavedTip('已保存到本地配置库');
@@ -118,11 +131,19 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
             <Button variant="ghost" size="sm" icon={copied ? 'check' : 'copy'} onClick={copy}>
               {copied ? '已复制' : '复制'}
             </Button>
+            {isTauri() && (
+              <Button variant="outline" size="sm" icon="save" onClick={saveToDisk}>
+                保存到本机…
+              </Button>
+            )}
             <Button variant="outline" size="sm" icon="download" onClick={() => download(filename, result.content)}>
               下载
             </Button>
           </div>
         </div>
+        {fileTip && (
+          <div className="border-b border-ink-200 bg-brand-50 px-5 py-2 text-[12px] text-brand-800">{fileTip}</div>
+        )}
         <pre className="max-h-[520px] overflow-auto bg-ink-900 p-4 text-[12px] leading-relaxed text-ink-100">
           <code className="font-mono">{result.content}</code>
         </pre>
@@ -156,11 +177,16 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-medium text-ink-800">{c.name}</div>
                   <div className="text-[11px] text-ink-400">
-                    {c.core === 'mihomo' ? 'mihomo' : 'sing-box'} · {c.device} · {c.nodeCount} 节点 · {c.ruleSetCount} 规则集 ·{' '}
-                    {new Date(c.createdAt).toLocaleString('zh-CN')}
+                    {c.core === 'mihomo' ? 'mihomo' : 'sing-box'} · {c.device} · {c.nodeCount} 节点 · {c.ruleSetCount}{' '}
+                    规则集 · {new Date(c.createdAt).toLocaleString('zh-CN')}
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" icon="download" onClick={() => download(`${c.name}.${c.core === 'mihomo' ? 'yaml' : 'json'}`, c.content)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="download"
+                  onClick={() => download(`${c.name}.${c.core === 'mihomo' ? 'yaml' : 'json'}`, c.content)}
+                >
                   导出
                 </Button>
                 {c.snapshot && (
@@ -175,7 +201,13 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
                     载入编辑
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" icon="trash" className="text-red-500" onClick={() => deleteConfig(c.id)} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="trash"
+                  className="text-red-500"
+                  onClick={() => deleteConfig(c.id)}
+                />
               </div>
             ))}
           </div>
@@ -189,20 +221,27 @@ export function PreviewStep({ onNext, onPrev }: { onNext?: () => void; onPrev?: 
           {options.device === 'client' ? (
             <>
               <li>
-                1. 下载 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">{filename}</code>，放到内核的配置目录
-                {options.core === 'mihomo' ? '（如 ~/.config/mihomo/config.yaml）' : '（如 /etc/sing-box/config.json）'}。
+                1. 下载 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">{filename}</code>
+                ，放到内核的配置目录
+                {options.core === 'mihomo' ? '（如 ~/.config/mihomo/config.yaml）' : '（如 /etc/sing-box/config.json）'}
+                。
               </li>
-              <li>2. 启动内核{options.core === 'mihomo' ? '：mihomo -d 配置目录' : '：sing-box run -c config.json'}。</li>
               <li>
-                3. 打开面板 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">http://127.0.0.1:{options.controllerPort}/ui</code>{' '}
+                2. 启动内核{options.core === 'mihomo' ? '：mihomo -d 配置目录' : '：sing-box run -c config.json'}。
+              </li>
+              <li>
+                3. 打开面板{' '}
+                <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">
+                  http://127.0.0.1:{options.controllerPort}/ui
+                </code>{' '}
                 切换节点与策略组。
               </li>
             </>
           ) : (
             <>
               <li>
-                1. 把 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">{filename}</code> 上传到旁路由 / 路由器（如
-                /etc/mihomo/config.yaml 或 /etc/sing-box/config.json）并启动服务。
+                1. 把 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[12px]">{filename}</code>{' '}
+                上传到旁路由 / 路由器（如 /etc/mihomo/config.yaml 或 /etc/sing-box/config.json）并启动服务。
               </li>
               <li>2. 局域网设备的网关和 DNS 改成这台设备的 IP；内核会自动劫持 53 端口。</li>
               <li>

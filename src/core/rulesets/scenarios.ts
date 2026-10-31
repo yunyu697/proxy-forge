@@ -87,7 +87,12 @@ export const SCENARIOS: ScenarioDef[] = [
           { label: 'TikTok', value: 'tiktok', ruleSets: ['stream-tiktok'] },
           { label: 'Hulu', value: 'hulu', ruleSets: ['stream-hulu'] },
           { label: 'Twitch', value: 'twitch', ruleSets: ['stream-twitch'] },
-          { label: '哔哩哔哩（港澳台独播）', value: 'bili', ruleSets: ['stream-bilibili'], desc: '常规情况直连即可，仅解锁限区番剧时需要走代理' },
+          {
+            label: '哔哩哔哩（港澳台独播）',
+            value: 'bili',
+            ruleSets: ['stream-bilibili'],
+            desc: '常规情况直连即可，仅解锁限区番剧时需要走代理',
+          },
         ],
       },
       {
@@ -189,7 +194,12 @@ export const SCENARIOS: ScenarioDef[] = [
           { label: 'PlayStation', value: 'ps', ruleSets: ['game-playstation'] },
           { label: 'Xbox', value: 'xbox', ruleSets: ['game-xbox'] },
           { label: 'Nintendo', value: 'ns', ruleSets: ['game-nintendo'] },
-          { label: '全部游戏（聚合）', value: 'all', ruleSets: ['game-category'], desc: '一个规则集覆盖主流游戏，体量中等' },
+          {
+            label: '全部游戏（聚合）',
+            value: 'all',
+            ruleSets: ['game-category'],
+            desc: '一个规则集覆盖主流游戏，体量中等',
+          },
         ],
       },
       {
@@ -462,7 +472,12 @@ export const SCENARIOS: ScenarioDef[] = [
         options: [
           { label: 'Apple（更新/App Store）', value: 'apple', ruleSets: ['accel-apple'] },
           { label: 'Microsoft（更新/Office）', value: 'microsoft', ruleSets: ['accel-microsoft'] },
-          { label: 'Steam 国内 CDN', value: 'steam', ruleSets: ['accel-steam-cn'], desc: '仅在需要从国内 CDN 下载时勾选，海外独占游戏下载仍可走代理' },
+          {
+            label: 'Steam 国内 CDN',
+            value: 'steam',
+            ruleSets: ['accel-steam-cn'],
+            desc: '仅在需要从国内 CDN 下载时勾选，海外独占游戏下载仍可走代理',
+          },
           { label: 'Xbox 国内 CDN', value: 'xbox', ruleSets: ['accel-xbox-cn'] },
         ],
       },

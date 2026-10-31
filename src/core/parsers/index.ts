@@ -1,14 +1,5 @@
 import { ProxyNode, ProxyType, newNodeId, PROXY_TYPE_LABELS } from '../types';
-import {
-  decodeBase64,
-  hostOf,
-  parseBool,
-  parseList,
-  parseNumber,
-  parseQuery,
-  splitHostPort,
-  splitUri,
-} from '../utils';
+import { decodeBase64, hostOf, parseBool, parseList, parseNumber, parseQuery, splitHostPort, splitUri } from '../utils';
 
 export interface ParseResult {
   nodes: ProxyNode[];
@@ -67,7 +58,12 @@ function tryParseYamlNode(line: string): ProxyNode | null {
     for (const seg of body.split(/,\s*(?=[a-zA-Z-]+:)/)) {
       const i = seg.indexOf(':');
       if (i === -1) continue;
-      kv[seg.slice(0, i).trim().replace(/^["']|["']$/g, '')] = seg
+      kv[
+        seg
+          .slice(0, i)
+          .trim()
+          .replace(/^["']|["']$/g, '')
+      ] = seg
         .slice(i + 1)
         .trim()
         .replace(/^["']|["']$/g, '');
@@ -152,7 +148,7 @@ export function parseUri(uri: string): ProxyNode | null {
 /* ---------------------------- Shadowsocks ---------------------------- */
 
 function parseShadowsocks(body: string, hash: string, raw: string): ProxyNode {
-  let name = hash;
+  const name = hash;
   let main = body;
 
   // 去 plugin 查询串
@@ -601,7 +597,7 @@ function parseHttp(body: string, hash: string, raw: string, isTls: boolean): Pro
     enabled: true,
     udp: false,
     tls: isTls,
-    username: colon === -1 ? (userinfo || undefined) : userinfo.slice(0, colon),
+    username: colon === -1 ? userinfo || undefined : userinfo.slice(0, colon),
     password: colon === -1 ? undefined : userinfo.slice(colon + 1),
     raw,
   };
@@ -620,7 +616,7 @@ function parseSocks(body: string, hash: string, raw: string): ProxyNode {
     enabled: true,
     udp: true,
     tls: false,
-    username: colon === -1 ? (userinfo || undefined) : userinfo.slice(0, colon),
+    username: colon === -1 ? userinfo || undefined : userinfo.slice(0, colon),
     password: colon === -1 ? undefined : userinfo.slice(colon + 1),
     raw,
   };
@@ -764,7 +760,9 @@ export function buildUri(node: ProxyNode): string {
     case 'http':
     case 'socks': {
       const scheme = node.type === 'http' ? (node.tls ? 'https' : 'http') : 'socks5';
-      const auth = node.username ? `${encodeURIComponent(node.username)}:${encodeURIComponent(node.password || '')}@` : '';
+      const auth = node.username
+        ? `${encodeURIComponent(node.username)}:${encodeURIComponent(node.password || '')}@`
+        : '';
       return `${scheme}://${auth}${host}:${node.port}#${name}`;
     }
     default:

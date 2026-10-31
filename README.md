@@ -25,6 +25,11 @@
 - **三种分流策略**：白名单（国外全代理）/ 黑名单（仅 GFWList，省资源）/ 全局
 - **镜像源切换**：规则集支持 GitHub 官方源、gh-proxy、ghfast、jsDelivr 等，国内下载不卡
 - **本地配置库**：保存 / 载入 / 导出历史配置，数据留在本机（localStorage）
+- **节点测速**：桌面版真实 TCP 握手测速（Web 版降级为启发式探测），支持批量测速与按延迟排序
+- **订阅管理**：保存订阅 URL，一键刷新节点并记录更新时间
+- **一键保存到本机**：桌面版直接把配置写入任意位置（系统保存对话框）
+- **深色模式**：跟随系统 + 手动切换，侧栏一键切换
+- **英文界面**：主界面骨架双语（侧栏导航 / 步骤标题 / 通用按钮），i18n 骨架可扩展
 
 ## 快速开始（Web 版）
 
@@ -47,11 +52,13 @@ npm run tauri:build    # 打包安装包（默认 --debug 产物在 src-tauri/ta
 - 应用图标用 `npx tauri icon <源图>` 生成，保证 RGBA 格式
 - 已知问题：macOS 26+ 上 dmg 打包脚本（bundle_dmg.sh 的 hdiutil 旧语法）不兼容，因此 `targets` 配置为 `["app"]`，产物为 `.app`；如需 dmg 分发，可在旧系统打包或手工 `hdiutil create`
 
-## 冒烟测试
+## 单元测试（vitest）
 
 ```bash
-npm run smoke    # esbuild 打包后 node 运行，26 项断言
+npm test        # vitest run：70+ 项断言（协议解析 / 双内核生成 / RouterOS）
 ```
+
+核心检查集中在 `src/core/smoke.ts`（导出 `runAllChecks()`），`npm run smoke` 仍可用 esbuild 方式在 Node 直接跑。
 
 ## 版本号与构建号
 
@@ -65,12 +72,21 @@ npm run smoke    # esbuild 打包后 node 运行，26 项断言
 
 | Job | 触发 | 内容 |
 | --- | --- | --- |
-| `test` | push / PR | 安装依赖 → 类型检查 → 冒烟测试 → 生产构建 |
-| `desktop` | 仅 `v*` 标签 | 全平台矩阵打包：macOS（dmg）/ Windows（NSIS exe）/ Linux（AppImage + deb），产物上传为 Artifact |
+| `test` | push / PR | ESLint → 类型检查 → vitest → 生产构建 |
+| `desktop` | 仅 `v*` 标签 | 全平台矩阵打包：macOS（**universal** dmg）/ Windows（NSIS exe）/ Linux（AppImage + deb），产物自动附加到 GitHub Release |
+| `publish-updater` | 仅 `v*` 标签 | 合并三平台更新器清单为 `latest.json` 并上传到 Release |
 
 > Tauri 不支持交叉编译，Windows 与 Linux 安装包由 CI 在对应系统 runner 上产出；本机只能构建 macOS 包。
 
 发布桌面版：`npm version patch && git push --follow-tags` 即可触发完整流程。Release Notes 见 [RELEASE_NOTES.md](./RELEASE_NOTES.md)。
+
+## 自动更新与签名
+
+- 更新器签名密钥在 `.keys/`（已 gitignore）。CI 从仓库 Secrets 读取 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，配置后打 tag 会自动生成 `.sig` 签名与 `latest.json` 更新清单
+- 公钥（配置 Tauri updater 插件时使用）：
+  `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDQUIzNzVCOEM0NDc2NTAKUldSUWRrU01XemVybk1xcVRpSWdEb3kxd1NRbDNjQjEyd3ZXRUZmTk9KQjNXckczMWVtVnZyeGkK`
+- 未配置 Secrets 时 CI 仍正常打包，只是没有签名与更新清单（优雅降级）
+- 代码签名（对外分发）：macOS 需 Apple Developer ID 公证，否则用户首次打开需右键 → 打开；Windows NSIS 未签名会触发 SmartScreen 提示，README 中说明绕过方法即可
 
 ## 目录结构
 

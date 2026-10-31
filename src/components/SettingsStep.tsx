@@ -39,20 +39,34 @@ export function SettingsStep({ onNext, onPrev }: { onNext: () => void; onPrev?: 
           </Field>
           {options.core === 'singbox' && (
             <Field label="sing-box 版本" hint="不同版本的配置结构略有差异，按实际内核版本选择">
-              <Select value={options.singboxVersion} onChange={(e) => setOptions({ singboxVersion: e.target.value as '1.11' | '1.12' })}>
+              <Select
+                value={options.singboxVersion}
+                onChange={(e) => setOptions({ singboxVersion: e.target.value as '1.11' | '1.12' })}
+              >
                 <option value="1.11">1.11.x</option>
                 <option value="1.12">1.12.x</option>
               </Select>
             </Field>
           )}
           <Field label="混合代理端口" hint="HTTP + SOCKS5 共用；旁路由/路由器上局域网设备连这个端口">
-            <Input type="number" value={options.mixedPort} onChange={(e) => setOptions({ mixedPort: Number(e.target.value) || 7890 })} />
+            <Input
+              type="number"
+              value={options.mixedPort}
+              onChange={(e) => setOptions({ mixedPort: Number(e.target.value) || 7890 })}
+            />
           </Field>
           <Field label="控制面板端口" hint="Clash 面板 / clash-api 地址">
-            <Input type="number" value={options.controllerPort} onChange={(e) => setOptions({ controllerPort: Number(e.target.value) || 9090 })} />
+            <Input
+              type="number"
+              value={options.controllerPort}
+              onChange={(e) => setOptions({ controllerPort: Number(e.target.value) || 9090 })}
+            />
           </Field>
           <Field label="日志等级">
-            <Select value={options.logLevel} onChange={(e) => setOptions({ logLevel: e.target.value as typeof options.logLevel })}>
+            <Select
+              value={options.logLevel}
+              onChange={(e) => setOptions({ logLevel: e.target.value as typeof options.logLevel })}
+            >
               <option value="silent">silent</option>
               <option value="error">error</option>
               <option value="warning">warning</option>
@@ -85,9 +99,7 @@ export function SettingsStep({ onNext, onPrev }: { onNext: () => void; onPrev?: 
             onChange={(v) => setOptions({ allowLan: v })}
             label="允许局域网连接（Allow-LAN）"
             desc={
-              isBind
-                ? '旁路由 / 主路由形态下强制开启并监听 0.0.0.0。'
-                : '开启后局域网内其他设备可以把代理指向本机。'
+              isBind ? '旁路由 / 主路由形态下强制开启并监听 0.0.0.0。' : '开启后局域网内其他设备可以把代理指向本机。'
             }
           />
           <Toggle
@@ -184,7 +196,8 @@ export function SettingsStep({ onNext, onPrev }: { onNext: () => void; onPrev?: 
       </Card>
 
       <Notice tone={activeCount ? 'info' : 'warn'}>
-        将使用 <b>{activeCount}</b> 个启用状态的节点生成配置。{!activeCount && '当前没有启用节点，请回到「节点管理」启用或导入。'}
+        将使用 <b>{activeCount}</b> 个启用状态的节点生成配置。
+        {!activeCount && '当前没有启用节点，请回到「节点管理」启用或导入。'}
       </Notice>
 
       <StepFooter

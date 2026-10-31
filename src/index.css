@@ -2,8 +2,133 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================================================================== */
+/* 主题变量：浅色为默认，.dark 整体切换（tailwind darkMode: 'class'）      */
+/* ==================================================================== */
 :root {
   color-scheme: light;
+
+  /* 品牌色 */
+  --c-brand-50: 238 246 255;
+  --c-brand-100: 217 234 255;
+  --c-brand-200: 188 218 255;
+  --c-brand-300: 142 195 255;
+  --c-brand-400: 89 161 255;
+  --c-brand-500: 51 125 255;
+  --c-brand-600: 27 92 245;
+  --c-brand-700: 21 71 225;
+  --c-brand-800: 24 60 182;
+  --c-brand-900: 25 55 143;
+
+  /* 墨色（中性色） */
+  --c-ink-50: 247 248 250;
+  --c-ink-100: 238 240 244;
+  --c-ink-200: 224 228 234;
+  --c-ink-300: 197 204 214;
+  --c-ink-400: 152 162 179;
+  --c-ink-500: 107 119 135;
+  --c-ink-600: 74 85 104;
+  --c-ink-700: 55 65 81;
+  --c-ink-800: 36 43 56;
+  --c-ink-900: 22 27 36;
+
+  /* 卡片表面色（映射到 Tailwind 的 white） */
+  --c-surface: 255 255 255;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.06);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* 品牌色：暗底下整体提亮、背景层压暗 */
+  --c-brand-50: 18 30 48;
+  --c-brand-100: 22 38 62;
+  --c-brand-200: 30 52 84;
+  --c-brand-300: 43 74 120;
+  --c-brand-400: 96 152 255;
+  --c-brand-500: 96 152 255;
+  --c-brand-600: 59 110 240;
+  --c-brand-700: 122 165 255;
+  --c-brand-800: 138 176 255;
+  --c-brand-900: 155 187 255;
+
+  /* 墨色：反转层级 */
+  --c-ink-50: 15 20 27;
+  --c-ink-100: 22 28 37;
+  --c-ink-200: 36 44 56;
+  --c-ink-300: 55 65 81;
+  --c-ink-400: 124 135 152;
+  --c-ink-500: 155 165 182;
+  --c-ink-600: 190 199 212;
+  --c-ink-700: 213 221 232;
+  --c-ink-800: 232 238 245;
+  --c-ink-900: 242 245 249;
+
+  --c-surface: 26 33 43;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* 状态色在暗底下的柔和覆盖（少量硬编码工具类的兜底） */
+.dark .bg-white {
+  background-color: rgb(var(--c-surface));
+}
+.dark .card {
+  background-color: rgb(var(--c-surface));
+}
+.dark .btn-outline,
+.dark .btn-danger {
+  background-color: rgb(var(--c-surface));
+}
+.dark .bg-red-50 {
+  background-color: rgb(58 24 24);
+}
+.dark .bg-red-100 {
+  background-color: rgb(66 28 28);
+}
+.dark .border-red-200 {
+  border-color: rgb(96 40 40);
+}
+.dark .bg-amber-50 {
+  background-color: rgb(56 42 14);
+}
+.dark .bg-amber-100 {
+  background-color: rgb(66 50 18);
+}
+.dark .border-amber-200 {
+  border-color: rgb(102 78 30);
+}
+.dark .text-amber-800 {
+  color: rgb(251 191 36);
+}
+.dark .text-amber-700 {
+  color: rgb(251 191 36);
+}
+.dark .text-amber-600 {
+  color: rgb(252 205 80);
+}
+.dark .bg-emerald-100 {
+  background-color: rgb(14 52 40);
+}
+.dark .text-emerald-600 {
+  color: rgb(52 211 153);
+}
+.dark .text-emerald-700 {
+  color: rgb(68 219 160);
+}
+.dark .bg-sky-100 {
+  background-color: rgb(12 44 64);
+}
+.dark .text-sky-700 {
+  color: rgb(125 211 252);
+}
+.dark .text-red-600 {
+  color: rgb(248 113 113);
+}
+.dark .text-red-700 {
+  color: rgb(248 113 113);
+}
+.dark .text-red-800 {
+  color: rgb(252 139 139);
 }
 
 html,
@@ -14,8 +139,8 @@ body,
 
 body {
   margin: 0;
-  background: #f5f7fa;
-  color: #242b38;
+  background: rgb(var(--c-ink-50));
+  color: rgb(var(--c-ink-800));
   -webkit-font-smoothing: antialiased;
 }
 
@@ -60,13 +185,13 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd2dc;
+  background: rgb(var(--c-ink-300));
   border-radius: 6px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #aeb6c2;
+  background: rgb(var(--c-ink-400));
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track {

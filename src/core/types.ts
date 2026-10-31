@@ -164,7 +164,14 @@ export function createEmptyNode(type: ProxyType): ProxyNode {
     case 'shadowsocks':
       return { ...base, port: 8388, cipher: 'chacha20-ietf-poly1305', tls: false };
     case 'shadowsocksr':
-      return { ...base, port: 8388, cipher: 'chacha20-ietf-poly1305', ssrProtocol: 'auth_aes128_md5', ssrObfs: 'tls1.2_ticket_auth', tls: false };
+      return {
+        ...base,
+        port: 8388,
+        cipher: 'chacha20-ietf-poly1305',
+        ssrProtocol: 'auth_aes128_md5',
+        ssrObfs: 'tls1.2_ticket_auth',
+        tls: false,
+      };
     case 'vmess':
       return { ...base, vmessSecurity: 'auto', alterId: 0, tls: false };
     case 'vless':
@@ -204,13 +211,31 @@ export interface CustomRuleSet {
 /** 自定义单条规则支持的类型 */
 export type CustomRuleType = 'DOMAIN-SUFFIX' | 'DOMAIN' | 'DOMAIN-KEYWORD' | 'IP-CIDR' | 'DST-PORT' | 'SRC-IP-CIDR';
 
-export const CUSTOM_RULE_TYPE_META: Record<CustomRuleType, { label: string; hint: string; placeholder: string; isIp: boolean }> = {
-  'DOMAIN-SUFFIX': { label: '域名后缀', hint: '匹配该后缀的所有域名（含子域），最常用', placeholder: '例：example.com', isIp: false },
-  'DOMAIN': { label: '完整域名', hint: '只精确匹配这一个域名', placeholder: '例：www.example.com', isIp: false },
+export const CUSTOM_RULE_TYPE_META: Record<
+  CustomRuleType,
+  { label: string; hint: string; placeholder: string; isIp: boolean }
+> = {
+  'DOMAIN-SUFFIX': {
+    label: '域名后缀',
+    hint: '匹配该后缀的所有域名（含子域），最常用',
+    placeholder: '例：example.com',
+    isIp: false,
+  },
+  DOMAIN: { label: '完整域名', hint: '只精确匹配这一个域名', placeholder: '例：www.example.com', isIp: false },
   'DOMAIN-KEYWORD': { label: '域名关键词', hint: '域名中包含该关键词即命中', placeholder: '例：google', isIp: false },
-  'IP-CIDR': { label: '目标 IP 段', hint: '按访问的目标 IP 匹配，建议勾选「局域网直连」防止误伤', placeholder: '例：192.168.1.0/24', isIp: true },
+  'IP-CIDR': {
+    label: '目标 IP 段',
+    hint: '按访问的目标 IP 匹配，建议勾选「局域网直连」防止误伤',
+    placeholder: '例：192.168.1.0/24',
+    isIp: true,
+  },
   'DST-PORT': { label: '目标端口', hint: '按访问的目标端口匹配，如 8443', placeholder: '例：8443', isIp: false },
-  'SRC-IP-CIDR': { label: '来源 IP 段', hint: '按发起连接的设备 IP 匹配，适合指定某台设备', placeholder: '例：192.168.1.100/32', isIp: true },
+  'SRC-IP-CIDR': {
+    label: '来源 IP 段',
+    hint: '按发起连接的设备 IP 匹配，适合指定某台设备',
+    placeholder: '例：192.168.1.100/32',
+    isIp: true,
+  },
 };
 
 export interface CustomRule {

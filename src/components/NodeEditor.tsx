@@ -32,7 +32,13 @@ const NETWORK_OPTIONS = [
 
 const COMMON_TLS: FieldDef[] = [
   { key: 'sni', label: 'SNI / 伪装域名', placeholder: '留空则使用服务器地址', group: 'tls' },
-  { key: 'fingerprint', label: 'uTLS 指纹', placeholder: 'chrome / firefox / safari / random', group: 'tls', hint: '模拟浏览器 TLS 指纹，抗探测' },
+  {
+    key: 'fingerprint',
+    label: 'uTLS 指纹',
+    placeholder: 'chrome / firefox / safari / random',
+    group: 'tls',
+    hint: '模拟浏览器 TLS 指纹，抗探测',
+  },
   {
     key: 'alpn',
     label: 'ALPN',
@@ -40,14 +46,38 @@ const COMMON_TLS: FieldDef[] = [
     group: 'tls',
     hint: '逗号分隔；hysteria 系列留空会自动填默认值',
   },
-  { key: 'skipCertVerify', label: '跳过证书校验', type: 'toggle', group: 'tls', hint: '自签证书时开启，存在中间人风险' },
+  {
+    key: 'skipCertVerify',
+    label: '跳过证书校验',
+    type: 'toggle',
+    group: 'tls',
+    hint: '自签证书时开启，存在中间人风险',
+  },
 ];
 
 const TRANSPORT_FIELDS: FieldDef[] = [
   { key: 'network', label: '传输层', type: 'select', options: NETWORK_OPTIONS, group: 'transport' },
-  { key: 'wsPath', label: 'WebSocket 路径', placeholder: '/path?ed=2048', group: 'transport', when: (n) => n.network === 'ws' || n.network === 'httpupgrade' },
-  { key: 'wsHost', label: 'WebSocket Host 头', placeholder: '伪装域名', group: 'transport', when: (n) => n.network === 'ws' || n.network === 'httpupgrade' },
-  { key: 'grpcServiceName', label: 'gRPC serviceName', placeholder: 'GunService', group: 'transport', when: (n) => n.network === 'grpc' },
+  {
+    key: 'wsPath',
+    label: 'WebSocket 路径',
+    placeholder: '/path?ed=2048',
+    group: 'transport',
+    when: (n) => n.network === 'ws' || n.network === 'httpupgrade',
+  },
+  {
+    key: 'wsHost',
+    label: 'WebSocket Host 头',
+    placeholder: '伪装域名',
+    group: 'transport',
+    when: (n) => n.network === 'ws' || n.network === 'httpupgrade',
+  },
+  {
+    key: 'grpcServiceName',
+    label: 'gRPC serviceName',
+    placeholder: 'GunService',
+    group: 'transport',
+    when: (n) => n.network === 'grpc',
+  },
   { key: 'h2Path', label: 'h2 路径', placeholder: '/path', group: 'transport', when: (n) => n.network === 'h2' },
   { key: 'h2Host', label: 'h2 Host', placeholder: '伪装域名', group: 'transport', when: (n) => n.network === 'h2' },
 ];
@@ -88,7 +118,13 @@ const SCHEMA: Record<ProxyType, FieldDef[]> = {
         { value: 'v2ray-plugin', label: 'v2ray-plugin' },
       ],
     },
-    { key: 'wsPath', label: '插件参数', placeholder: 'obfs=http;obfs-host=xxx 或 path=/;host=xxx', group: 'transport', when: (n) => !!n.plugin },
+    {
+      key: 'wsPath',
+      label: '插件参数',
+      placeholder: 'obfs=http;obfs-host=xxx 或 path=/;host=xxx',
+      group: 'transport',
+      when: (n) => !!n.plugin,
+    },
   ],
   shadowsocksr: [
     { key: 'server', label: '服务器地址', required: true, group: 'basic' },
@@ -100,7 +136,10 @@ const SCHEMA: Record<ProxyType, FieldDef[]> = {
       type: 'select',
       required: true,
       group: 'auth',
-      options: ['rc4-md5', 'aes-128-cfb', 'aes-256-cfb', 'chacha20-ietf', 'chacha20-ietf-poly1305'].map((v) => ({ value: v, label: v })),
+      options: ['rc4-md5', 'aes-128-cfb', 'aes-256-cfb', 'chacha20-ietf', 'chacha20-ietf-poly1305'].map((v) => ({
+        value: v,
+        label: v,
+      })),
     },
     { key: 'password', label: '密码', type: 'password', required: true, group: 'auth' },
     { key: 'ssrProtocol', label: '协议 (protocol)', placeholder: 'auth_aes128_md5', required: true, group: 'auth' },
@@ -145,8 +184,19 @@ const SCHEMA: Record<ProxyType, FieldDef[]> = {
         { value: 'none', label: '无' },
       ],
     },
-    { key: 'realityPublicKey', label: 'REALITY public key', required: true, group: 'tls', when: (n) => (n as any).securityMode === 'reality' },
-    { key: 'realityShortId', label: 'REALITY shortId', group: 'tls', when: (n) => (n as any).securityMode === 'reality' },
+    {
+      key: 'realityPublicKey',
+      label: 'REALITY public key',
+      required: true,
+      group: 'tls',
+      when: (n) => (n as any).securityMode === 'reality',
+    },
+    {
+      key: 'realityShortId',
+      label: 'REALITY shortId',
+      group: 'tls',
+      when: (n) => (n as any).securityMode === 'reality',
+    },
     ...COMMON_TLS,
     { key: 'udp', label: '启用 UDP', type: 'toggle', group: 'misc' },
   ],
@@ -164,7 +214,13 @@ const SCHEMA: Record<ProxyType, FieldDef[]> = {
     { key: 'port', label: '端口', type: 'number', required: true, group: 'basic' },
     { key: 'name', label: '节点名称', group: 'basic' },
     { key: 'authStr', label: '认证密码 (auth)', group: 'auth', hint: '留空表示服务端未开启认证' },
-    { key: 'up', label: '上行带宽', placeholder: '100 Mbps', group: 'auth', hint: '尽量按真实带宽填写，过大会造成拥塞' },
+    {
+      key: 'up',
+      label: '上行带宽',
+      placeholder: '100 Mbps',
+      group: 'auth',
+      hint: '尽量按真实带宽填写，过大会造成拥塞',
+    },
     { key: 'down', label: '下行带宽', placeholder: '200 Mbps', group: 'auth' },
     { key: 'obfsPassword', label: '混淆密码 (obfs)', group: 'auth' },
     { key: 'hopPorts', label: '端口跳跃范围', placeholder: '20000-40000', group: 'misc' },
@@ -252,13 +308,7 @@ const GROUP_META: { id: FieldDef['group']; title: string; desc?: string }[] = [
   { id: 'misc', title: '其他' },
 ];
 
-export function NodeEditor({
-  initial,
-  onClose,
-}: {
-  initial?: ProxyNode;
-  onClose: (saved?: boolean) => void;
-}) {
+export function NodeEditor({ initial, onClose }: { initial?: ProxyNode; onClose: (saved?: boolean) => void }) {
   const addNodes = useStore((s) => s.addNodes);
   const updateNode = useStore((s) => s.updateNode);
   const [type, setType] = useState<ProxyType>(initial?.type || 'shadowsocks');
@@ -334,7 +384,9 @@ export function NodeEditor({
                 onClick={() => switchType(t)}
                 className={clsx(
                   'rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition',
-                  type === t ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-600 hover:bg-ink-50',
+                  type === t
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-ink-200 text-ink-600 hover:bg-ink-50',
                 )}
               >
                 {PROXY_TYPE_LABELS[t]}
@@ -352,9 +404,7 @@ export function NodeEditor({
         {/* 分组渲染字段 */}
         <div className="space-y-5">
           {GROUP_META.map((g) => {
-            const groupFields = fields.filter(
-              (f) => f.group === g.id && (!f.when || f.when(node)),
-            );
+            const groupFields = fields.filter((f) => f.group === g.id && (!f.when || f.when(node)));
             if (!groupFields.length) return null;
             return (
               <div key={g.id}>
@@ -406,7 +456,9 @@ export function NodeEditor({
                           placeholder={f.placeholder}
                           value={value ?? ''}
                           onChange={(e) =>
-                            patch({ [f.key]: f.type === 'number' ? Number(e.target.value) || '' : e.target.value } as Partial<ProxyNode>)
+                            patch({
+                              [f.key]: f.type === 'number' ? Number(e.target.value) || '' : e.target.value,
+                            } as Partial<ProxyNode>)
                           }
                         />
                       </Field>

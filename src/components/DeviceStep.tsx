@@ -87,17 +87,18 @@ export function DeviceStep({ onNext, onPrev }: { onNext: () => void; onPrev?: ()
               <b>网关模式的三点提醒（配置已内置缓解措施，生成时会写入注释）：</b>
               <ul className="mt-1.5 list-disc space-y-1 pl-4">
                 <li>
-                  <b>终端功耗可能增加</b>：keep-alive 心跳、DNS 劫持会让后台 App 更频繁唤醒，无线设备耗电略高于直连。已放宽
-                  keepalive 间隔、关闭 UDP 会话保持；仍明显时可延长测速间隔或让闲置设备切回普通 WiFi。
+                  <b>终端功耗可能增加</b>：keep-alive 心跳、DNS 劫持会让后台 App
+                  更频繁唤醒，无线设备耗电略高于直连。已放宽 keepalive 间隔、关闭 UDP
+                  会话保持；仍明显时可延长测速间隔或让闲置设备切回普通 WiFi。
                 </li>
                 <li>
-                  <b>个别网站可能打不开</b>（客户端同配置却正常）：多为 PPPoE 导致的 MTU 分片、IPv6
-                  绕行或浏览器安全 DNS（DoH）绕过劫持。TUN MTU 已按链路调低、默认拦截 QUIC 强制回落
-                  TCP；如仍复现，请在浏览器关闭「安全 DNS」并保持 IPv6 关闭。
+                  <b>个别网站可能打不开</b>（客户端同配置却正常）：多为 PPPoE 导致的 MTU 分片、IPv6 绕行或浏览器安全
+                  DNS（DoH）绕过劫持。TUN MTU 已按链路调低、默认拦截 QUIC 强制回落 TCP；如仍复现，请在浏览器关闭「安全
+                  DNS」并保持 IPv6 关闭。
                 </li>
                 <li>
-                  <b>国内网站可能变慢</b>：请保持「中国大陆域名 / IP」规则集启用，并建议勾选「直连加速」场景（Apple
-                  / 微软 / Steam 国内 CDN 走代理反而慢）。
+                  <b>国内网站可能变慢</b>：请保持「中国大陆域名 / IP」规则集启用，并建议勾选「直连加速」场景（Apple /
+                  微软 / Steam 国内 CDN 走代理反而慢）。
                 </li>
               </ul>
             </Notice>

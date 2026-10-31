@@ -1,10 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useStore } from '../store/useStore';
-import { Button, Card, Chip, EmptyState, Icon, Input, SectionTitle, Select, StepFooter } from './ui';
+import { Button, Card, Chip, EmptyState, Icon, Input, Notice, SectionTitle, Select, StepFooter } from './ui';
 import { PROXY_TYPE_LABELS, ProxyNode } from '../core/types';
 import { NodeEditor } from './NodeEditor';
 import { buildUri } from '../core/parsers';
+import { latencyTone, runSpeedTest, type PingResult } from '../core/speedtest';
+import { isTauri } from '../desktop';
+
+const LATENCY_TONES = {
+  green: { tone: 'green', text: 'green' },
+  amber: { tone: 'amber', text: 'amber' },
+  red: { tone: 'red', text: 'red' },
+  ink: { tone: 'ink', text: 'ink' },
+} as const;
 
 export function NodesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () => void }) {
   const nodes = useStore((s) => s.nodes);
@@ -17,16 +26,56 @@ export function NodesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
   const [typeFilter, setTypeFilter] = useState('all');
   const [selected, setSelected] = useState<string[]>([]);
   const [copied, setCopied] = useState('');
+  const [results, setResults] = useState<Record<string, PingResult>>({});
+  const [testing, setTesting] = useState(false);
+  const [sortByLatency, setSortByLatency] = useState(false);
+  const cancelTestRef = useRef<(() => void) | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      nodes.filter(
-        (n) =>
-          (typeFilter === 'all' || n.type === typeFilter) &&
-          (!filter || n.name.toLowerCase().includes(filter.toLowerCase()) || n.server.toLowerCase().includes(filter.toLowerCase())),
-      ),
-    [nodes, filter, typeFilter],
-  );
+  const filtered = useMemo(() => {
+    const list = nodes.filter(
+      (n) =>
+        (typeFilter === 'all' || n.type === typeFilter) &&
+        (!filter ||
+          n.name.toLowerCase().includes(filter.toLowerCase()) ||
+          n.server.toLowerCase().includes(filter.toLowerCase())),
+    );
+    if (!sortByLatency) return list;
+    const rank = (n: ProxyNode) => {
+      const r = results[n.id];
+      if (!r) return 2;
+      if (r.status === 'fail') return 1;
+      return 0;
+    };
+    return [...list].sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return (results[a.id]?.ms ?? Infinity) - (results[b.id]?.ms ?? Infinity);
+    });
+  }, [nodes, filter, typeFilter, sortByLatency, results]);
+
+  const startTest = () => {
+    setTesting(true);
+    setResults(Object.fromEntries(nodes.map((n) => [n.id, { status: 'pending' as const }])));
+    cancelTestRef.current = runSpeedTest(nodes, {
+      onResult: (id, r) => setResults((prev) => ({ ...prev, [id]: r })),
+    });
+    // 结束检测：轮询 pending 清空后复位
+    const timer = setInterval(() => {
+      setResults((prev) => {
+        if (!Object.values(prev).some((r) => r.status === 'pending')) {
+          clearInterval(timer);
+          setTesting(false);
+        }
+        return prev;
+      });
+    }, 500);
+  };
+
+  const stopTest = () => {
+    cancelTestRef.current?.();
+    setTesting(false);
+  };
 
   const typeOptions = useMemo(() => {
     const types = [...new Set(nodes.map((n) => n.type))];
@@ -95,7 +144,29 @@ export function NodesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
           <Button variant="outline" icon="user" onClick={() => setCreating(true)}>
             手动添加
           </Button>
+          {testing ? (
+            <Button variant="danger" onClick={stopTest}>
+              停止测速
+            </Button>
+          ) : (
+            <Button variant="outline" icon="gauge" onClick={startTest}>
+              一键测速
+            </Button>
+          )}
+          {Object.keys(results).length > 0 && !testing && (
+            <Button variant="ghost" onClick={() => setSortByLatency(!sortByLatency)}>
+              {sortByLatency ? '✓ 按延迟排序' : '按延迟排序'}
+            </Button>
+          )}
         </div>
+
+        {Object.keys(results).length > 0 && (
+          <Notice tone="info">
+            {isTauri()
+              ? '桌面版：真实 TCP 握手测速（并发 6，超时 4s）。延迟只反映到服务器的连通性，不等于代理可用性。'
+              : '浏览器环境测速为启发式参考；安装桌面版可获得真实 TCP 握手测速。'}
+          </Notice>
+        )}
 
         {selected.length > 0 && (
           <div className="mb-3 flex items-center gap-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
@@ -130,12 +201,15 @@ export function NodesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
                 type="checkbox"
                 className="accent-brand-600"
                 checked={selected.includes(n.id)}
-                onChange={(e) => setSelected(e.target.checked ? [...selected, n.id] : selected.filter((x) => x !== n.id))}
+                onChange={(e) =>
+                  setSelected(e.target.checked ? [...selected, n.id] : selected.filter((x) => x !== n.id))
+                }
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-[13px] font-medium text-ink-800">{n.name}</span>
                   <Chip tone="ink">{PROXY_TYPE_LABELS[n.type]}</Chip>
+                  {results[n.id] && <LatencyChip r={results[n.id]} />}
                 </div>
                 <div className="mt-0.5 truncate font-mono text-[11px] text-ink-400">
                   {n.server}:{n.port}
@@ -148,7 +222,11 @@ export function NodesStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () 
               >
                 <Icon name={copied === n.id ? 'check' : 'copy'} size={14} />
               </button>
-              <button className="btn-ghost p-1.5 text-ink-400 hover:text-brand-600" title="编辑" onClick={() => setEditing(n)}>
+              <button
+                className="btn-ghost p-1.5 text-ink-400 hover:text-brand-600"
+                title="编辑"
+                onClick={() => setEditing(n)}
+              >
                 <Icon name="edit" size={14} />
               </button>
               <Toggle checked={n.enabled} onChange={(v) => updateNode(n.id, { enabled: v })} />
@@ -192,7 +270,35 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       className={clsx('relative h-5 w-9 shrink-0 rounded-full transition', checked ? 'bg-brand-600' : 'bg-ink-300')}
       title={checked ? '已启用' : '已禁用'}
     >
-      <span className={clsx('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all', checked ? 'left-[18px]' : 'left-0.5')} />
+      <span
+        className={clsx(
+          'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all',
+          checked ? 'left-[18px]' : 'left-0.5',
+        )}
+      />
     </button>
+  );
+}
+
+function LatencyChip({ r }: { r: PingResult }) {
+  if (r.status === 'pending') {
+    return (
+      <Chip tone="ink" className="!px-1.5 !py-0 !text-[10px]">
+        …
+      </Chip>
+    );
+  }
+  if (r.status === 'fail') {
+    return (
+      <Chip tone="red" className="!px-1.5 !py-0 !text-[10px]">
+        超时
+      </Chip>
+    );
+  }
+  const tone = LATENCY_TONES[latencyTone(r.ms)];
+  return (
+    <Chip tone={tone.tone} className="!px-1.5 !py-0 !text-[10px]">
+      {r.ms}ms
+    </Chip>
   );
 }

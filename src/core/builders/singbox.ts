@@ -229,9 +229,7 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
     servers: [
       { tag: 'dns-direct', address: splitDnsFirst(options.dnsDirect), detour: 'direct' },
       { tag: 'dns-remote', address: splitDnsFirst(options.dnsRemote), detour: '🚀 节点选择' },
-      ...(options.fakeIp
-        ? [{ tag: 'dns-fakeip', address: 'fakeip' }]
-        : []),
+      ...(options.fakeIp ? [{ tag: 'dns-fakeip', address: 'fakeip' }] : []),
     ],
     rules: dnsRules,
     final: 'dns-remote',
@@ -373,8 +371,7 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
     clash_api: {
       external_controller: `${bindAll ? '0.0.0.0' : '127.0.0.1'}:${options.controllerPort}`,
       external_ui: 'ui',
-      external_ui_download_url:
-        'https://testingcf.jsdelivr.net/gh/MetaCubeX/Yacd-meta@gh-pages',
+      external_ui_download_url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/Yacd-meta@gh-pages',
       secret: '',
       default_mode: options.strategy === 'global' ? 'global' : 'rule',
     },
@@ -423,8 +420,10 @@ function customRuleToSingbox(c: { type: CustomRuleType; value: string }, target:
 }
 
 function splitDnsFirst(v: string): string {
-  return v
-    .split(/[,\n]/)
-    .map((x) => x.trim())
-    .filter(Boolean)[0] || 'https://223.5.5.5/dns-query';
+  return (
+    v
+      .split(/[,\n]/)
+      .map((x) => x.trim())
+      .filter(Boolean)[0] || 'https://223.5.5.5/dns-query'
+  );
 }
