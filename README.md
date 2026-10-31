@@ -50,7 +50,21 @@ npm run tauri:build    # 打包安装包（默认 --debug 产物在 src-tauri/ta
 
 - crates.io 走 rsproxy 镜像（`src-tauri/.cargo/config.toml`，仅本项目生效）
 - 应用图标用 `npx tauri icon <源图>` 生成，保证 RGBA 格式
-- 已知问题：macOS 26+ 上 dmg 打包脚本（bundle_dmg.sh 的 hdiutil 旧语法）不兼容，因此 `targets` 配置为 `["app"]`，产物为 `.app`；如需 dmg 分发，可在旧系统打包或手工 `hdiutil create`
+- 已知问题：本地 macOS 26+ 上 dmg 打包脚本（bundle_dmg.sh 的 hdiutil 旧语法）不兼容，因此 `targets` 默认 `["app"]`，本地产物为 `.app`；**CI runner 上 dmg 正常产出**，直接下载 Release 里的 dmg 即可
+
+## 移动端（Android）
+
+Tauri 2 同时支持 Android。本机需安装 Android SDK + NDK 与 Rust Android 目标后才能构建，CI 已配好完整链路：
+
+```bash
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+npm run tauri android init     # 生成 src-tauri/gen/android 脚手架（首次）
+npm run tauri android build    # 产出 APK（默认 aab，加 --apk 出通用 APK）
+```
+
+- 发布用的签名密钥库存于仓库 Secrets（`ANDROID_KEYSTORE_BASE64` + 别名/密码），CI 每次解码同一份，**保证所有版本的 APK 用同一密钥签名**，已安装的应用才能增量更新
+- 未配置 Secrets 时 `tauri android build` 仍能用调试密钥打包，但无法作为可更新的正式发布包
+- Android 包目前为「配置生成器」主流程的通用壳工程，桌面端专有能力（如保存到本机对话框）在移动端尚未做权限适配
 
 ## 单元测试（vitest）
 
@@ -68,17 +82,19 @@ npm test        # vitest run：70+ 项断言（协议解析 / 双内核生成 / 
 
 ## CI（GitHub Actions）
 
-`.github/workflows/ci.yml`，两个 job：
+`.github/workflows/ci.yml`，五个 job：
 
 | Job | 触发 | 内容 |
 | --- | --- | --- |
 | `test` | push / PR | ESLint → 类型检查 → vitest → 生产构建 |
-| `desktop` | 仅 `v*` 标签 | 全平台矩阵打包：macOS（**universal** dmg）/ Windows（NSIS exe）/ Linux（AppImage + deb），产物自动附加到 GitHub Release |
-| `publish-updater` | 仅 `v*` 标签 | 合并三平台更新器清单为 `latest.json` 并上传到 Release |
+| `release` | 仅 `v*` 标签 | 打 `v*` 标签时创建 GitHub Release（自动生成变更说明） |
+| `desktop` | 仅 `v*` 标签 | 全平台矩阵打包并附加到 Release：macOS（**universal** dmg）/ Windows（NSIS exe + MSI + zip）/ Linux（AppImage + deb + rpm） |
+| `android` | 仅 `v*` 标签 | Ubuntu runner 上 `tauri android build` 产出通用 APK（直接安装）+ AAB（Play 商店），用仓库 Secret 里的同一份密钥库签名，保证更新一致 |
+| `publish-updater` | 仅 `v*` 标签 | 合并三桌面平台更新器清单为 `latest.json` 并上传到 Release |
 
-> Tauri 不支持交叉编译，Windows 与 Linux 安装包由 CI 在对应系统 runner 上产出；本机只能构建 macOS 包。
+> Tauri 不支持交叉编译，Windows / Linux / Android 安装包由 CI 在对应系统 runner 上产出；本机只能构建 macOS 包。
 
-发布桌面版：`npm version patch && git push --follow-tags` 即可触发完整流程。Release Notes 见 [RELEASE_NOTES.md](./RELEASE_NOTES.md)。
+发布新版本：`npm version <patch|minor|major> && git push origin main <新标签>` 即可触发完整流程。Release Notes 见 [RELEASE_NOTES.md](./RELEASE_NOTES.md)。
 
 ## 自动更新与签名
 
@@ -86,7 +102,8 @@ npm test        # vitest run：70+ 项断言（协议解析 / 双内核生成 / 
 - 公钥（配置 Tauri updater 插件时使用）：
   `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDQUIzNzVCOEM0NDc2NTAKUldSUWRrU01XemVybk1xcVRpSWdEb3kxd1NRbDNjQjEyd3ZXRUZmTk9KQjNXckczMWVtVnZyeGkK`
 - 未配置 Secrets 时 CI 仍正常打包，只是没有签名与更新清单（优雅降级）
-- 代码签名（对外分发）：macOS 需 Apple Developer ID 公证，否则用户首次打开需右键 → 打开；Windows NSIS 未签名会触发 SmartScreen 提示，README 中说明绕过方法即可
+- 代码签名（对外分发）：macOS 需 Apple Developer ID 公证，否则用户首次打开需右键 → 打开；Windows 的 NSIS exe / MSI 未做 Authenticode 签名会触发 SmartScreen 提示，zip 不受影响；Android APK 已用上面仓库 Secrets 里的发布密钥库签名（自签名，安装时系统会提示「未知来源」，允许即可）
+- 如需消除 SmartScreen / 未知来源提示，需额外购置代码签名证书并接入 CI 的签名步骤（当前未配置）
 
 ## 目录结构
 

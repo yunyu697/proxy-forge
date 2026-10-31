@@ -1,5 +1,35 @@
 # Release Notes
 
+## v1.2.0（2026-10-31）—— 全平台安装包 + Android
+
+在 v1.1.0（12 项工程增强：节点测速、订阅管理、保存到本机、深色模式、英文界面、ESLint/Prettier/vitest、Dependabot、更新器基建）基础上，补齐发布渠道：
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+### 发布链路修正
+
+- 新增 `release` job：打标签时先建 GitHub Release，桌面端 / Android job 再往里挂产物（此前产物只留在 Artifacts、没挂到 Release）
+- 桌面端 `publish-updater` 改从 Release 下载三平台 `updater-*.json` 合并为 `latest.json`（此前未上传为 Artifact 导致合并失败）
+- Windows MSI 依赖 WiX Toolset，CI 在 Windows runner 上自动下载安装
+- Linux 增加 `rpm`（需 `rpm` 工具，已加入 apt 依赖）
+
+### Android 签名一致性
+
+- 发布密钥库以 PKCS12 形式存于仓库 Secret（`ANDROID_KEYSTORE_BASE64` + 别名 / 密码），CI 每次解码同一份写入 `keystore.properties`
+- 所有版本的 APK 用同一密钥签名，已安装应用可正常增量更新
+- Android 工程脚手架（`src-tauri/gen/android`）不提交，CI 用 `tauri android init --ci` 现场生成
+
+> 已知限制：本机（macOS 26+）dmg 打包脚本与新版 hdiutil 不兼容，本地产物为 `.app`；CI runner 上 dmg 正常。sing-box 不支持 SSR，生成时自动跳过。
+
+---
+
 ## v1.0.0（2026-10-31）—— 首个正式版
 
 从 0.1.0 起经历七轮迭代后的第一个正式版本。一套引导式向导，覆盖「导入节点 → 选择设备 → 场景规则 → 生成配置 → 部署上线」全流程。

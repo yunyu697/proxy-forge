@@ -25,7 +25,7 @@ const bundleBase =
 
 const GLOBS = {
   darwin: ['macos/*.app.tar.gz', 'dmg/*.dmg'],
-  windows: ['nsis/*.exe'],
+  windows: ['nsis/*.exe', 'msi/*.msi'],
   linux: ['appimage/*.AppImage', 'deb/*.deb'],
 };
 

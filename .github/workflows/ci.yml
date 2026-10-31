@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   pull_request:
 
+# 发布相关 job 需要向 GitHub Release 上传产物
+permissions:
+  contents: write
+
 jobs:
   test:
     name: 检查（lint + typecheck + 测试 + 构建）
@@ -33,9 +37,29 @@ jobs:
       - name: 生产构建
         run: npm run build
 
+  # 打 v* 标签时先创建一个 GitHub Release，后续桌面端 / Android job 往里挂产物
+  release:
+    name: 创建 Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "ProxyForge $GITHUB_REF_NAME" \
+            --generate-notes \
+            --latest || echo "Release 已存在，继续"
+
   desktop:
     name: 桌面端打包（${{ matrix.label }}）
-    needs: test
+    needs: [test, release]
     # 只在打 v* 标签时构建，产物直接附加到对应的 GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
     strategy:
@@ -47,21 +71,19 @@ jobs:
             # universal 二进制：同时支持 Apple Silicon 与 Intel
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin --bundles dmg
-            artifact: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            bundle_path: src-tauri/target/universal-apple-darwin/release/bundle/**
             platform: darwin
           - os: windows-latest
             label: Windows
             targets: ''
-            args: --bundles nsis
-            artifact: src-tauri/target/release/bundle/nsis/*.exe
+            args: --bundles nsis,msi,zip
+            bundle_path: src-tauri/target/release/bundle/**
             platform: windows
           - os: ubuntu-22.04
             label: Linux
             targets: ''
-            args: --bundles appimage deb
-            artifact: |
-              src-tauri/target/release/bundle/appimage/*.AppImage
-              src-tauri/target/release/bundle/deb/*.deb
+            args: --bundles appimage,deb,rpm
+            bundle_path: src-tauri/target/release/bundle/**
             platform: linux
     runs-on: ${{ matrix.os }}
     steps:
@@ -86,7 +108,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev rpm
+
+      # Windows 的 MSI 打包依赖 WiX Toolset（runner 默认未安装）
+      - name: 安装 WiX Toolset（MSI 打包依赖）
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip -OutFile wix.zip
+          Expand-Archive wix.zip -DestinationPath C:\wix
+          echo "C:\wix" >> $env:GITHUB_PATH
 
       - name: 安装依赖
         run: npm ci
@@ -95,15 +126,16 @@ jobs:
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           # 自动更新签名密钥（仓库 Secrets：TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD）
+          # 未配置时优雅降级：不生成 .sig，更新器清单对应平台为空
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri:build -- ${{ matrix.args }}
 
-      - name: 上传构建产物
+      - name: 上传构建产物（备份）
         uses: actions/upload-artifact@v4
         with:
           name: ProxyForge-${{ matrix.label }}
-          path: ${{ matrix.artifact }}
+          path: ${{ matrix.bundle_path }}
           if-no-files-found: warn
 
       - name: 生成更新器清单
@@ -117,8 +149,93 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          FILES=$(ls ${{ matrix.artifact }} 2>/dev/null | tr '\n' ' ')
-          gh release upload "$GITHUB_REF_NAME" --clobber $FILES "updater-${{ matrix.platform }}.json"
+          mapfile -t FILES < <(find src-tauri/target -type f \( \
+            -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.zip' \
+            -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
+          if [ ${#FILES[@]} -gt 0 ]; then
+            gh release upload "$GITHUB_REF_NAME" --clobber "${FILES[@]}"
+          fi
+          gh release upload "$GITHUB_REF_NAME" --clobber "updater-${{ matrix.platform }}.json"
+
+  android:
+    name: Android 构建（APK / AAB）
+    needs: [test, release]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: 安装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      # NDK 是 Rust 交叉编译 Android 原生库的必需组件
+      - name: 安装 NDK 与接受许可
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "ndk;27.2.12479018"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 现场生成 Android 工程脚手架（仓库不提交 gen/android）
+      - name: 初始化 Android 工程
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          NDK_HOME: ${{ env.NDK_HOME }}
+        run: npx tauri android init --ci --skip-targets-install
+
+      # 从仓库 Secret 解码同一份签名密钥库，保证每次构建签名一致（应用可增量更新）
+      - name: 写入签名密钥库
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > src-tauri/gen/android/release.p12
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          password=$ANDROID_STORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          storeFile=$(pwd)/src-tauri/gen/android/release.p12
+          EOF
+
+      - name: 构建 Android 发布包（通用 APK + AAB）
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          NDK_HOME: ${{ env.NDK_HOME }}
+        run: npx tauri android build --ci --apk --aab
+
+      - name: 附加 APK / AAB 到 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          APK=$(find src-tauri/gen/android -path '*universal/release/*.apk' | head -1)
+          [ -z "$APK" ] && APK=$(find src-tauri/gen/android -name '*.apk' -path '*release*' | head -1)
+          AAB=$(find src-tauri/gen/android -name '*.aab' -path '*release*' | head -1)
+          [ -n "$APK" ] && gh release upload "$GITHUB_REF_NAME" --clobber "$APK"
+          [ -n "$AAB" ] && gh release upload "$GITHUB_REF_NAME" --clobber "$AAB"
 
   publish-updater:
     name: 合并更新器清单
@@ -132,9 +249,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download "$GITHUB_RUN_ID" -n updater-darwin.json -D updater/
-          gh run download "$GITHUB_RUN_ID" -n updater-windows.json -D updater/
-          gh run download "$GITHUB_RUN_ID" -n updater-linux.json -D updater/
+          gh release download "$GITHUB_REF_NAME" -p "updater-*.json" -D updater/
           node scripts/merge-updater-manifest.mjs updater/ > latest.json
 
       - name: 上传 latest.json 到 Release
