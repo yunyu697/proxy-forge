@@ -76,7 +76,7 @@ jobs:
           - os: windows-latest
             label: Windows
             targets: ''
-            args: --bundles nsis,msi,zip
+            args: --bundles nsis,msi
             bundle_path: src-tauri/target/release/bundle/**
             platform: windows
           - os: ubuntu-22.04
@@ -131,6 +131,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri:build -- ${{ matrix.args }}
 
+      # Windows：额外生成便携 zip（单 exe 绿色版，用户要求）
+      - name: 生成便携 zip（Windows）
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          cd src-tauri/target/release
+          rm -f "$RUNNER_TEMP/ProxyForge-portable-windows.zip"
+          if [ -d resources ]; then
+            zip -r "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ProxyForge.exe resources
+          else
+            zip -j "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ProxyForge.exe
+          fi
+
       - name: 上传构建产物（备份）
         uses: actions/upload-artifact@v4
         with:
@@ -144,16 +157,18 @@ jobs:
         shell: bash
         run: node scripts/gen-updater-manifest.mjs "updater-${{ matrix.platform }}.json"
 
+      # 跨平台兼容的上传（macOS 自带 bash 3.2 不支持 mapfile，统一用 find -print0 | xargs）
       - name: 附加产物到 Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          mapfile -t FILES < <(find src-tauri/target -type f \( \
-            -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.zip' \
-            -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
-          if [ ${#FILES[@]} -gt 0 ]; then
-            gh release upload "$GITHUB_REF_NAME" --clobber "${FILES[@]}"
+          find src-tauri/target -type f \( \
+            -name '*.dmg' -o -name '*.exe' -o -name '*.msi' \
+            -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
+            -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
+          if [ -f "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ]; then
+            gh release upload "$GITHUB_REF_NAME" --clobber "$RUNNER_TEMP/ProxyForge-portable-windows.zip"
           fi
           gh release upload "$GITHUB_REF_NAME" --clobber "updater-${{ matrix.platform }}.json"
 
@@ -161,7 +176,7 @@ jobs:
     name: Android 构建（APK / AAB）
     needs: [test, release]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -179,11 +194,12 @@ jobs:
       - name: 安装 Android SDK
         uses: android-actions/setup-android@v3
 
-      # NDK 是 Rust 交叉编译 Android 原生库的必需组件
-      - name: 安装 NDK 与接受许可
+      # NDK 是 Rust 交叉编译 Android 原生库的必需组件；Tauri CLI 不会自动下载 NDK，必须显式安装并设 NDK_HOME。
+      # Tauri 2.12 生成的模板 compileSdk=36，因此一并安装对应 platform 与 build-tools。
+      - name: 安装 NDK / SDK 平台 / 构建工具
         run: |
           yes | sdkmanager --licenses || true
-          sdkmanager "ndk;27.2.12479018"
+          sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
@@ -197,33 +213,42 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      # 现场生成 Android 工程脚手架（仓库不提交 gen/android）
+      # 现场生成 Android 工程脚手架（仓库不提交 gen/android）；--skip-targets-install 复用上面已装的 Rust 目标
       - name: 初始化 Android 工程
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          NDK_HOME: ${{ env.NDK_HOME }}
         run: npx tauri android init --ci --skip-targets-install
 
-      # 从仓库 Secret 解码同一份签名密钥库，保证每次构建签名一致（应用可增量更新）
-      - name: 写入签名密钥库
+      # 从仓库 Secret 解码同一份签名密钥库，并注入 gradle 签名配置，保证每次构建签名一致（应用可增量更新）
+      - name: 写入签名密钥库并注入 gradle 签名
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_STORE_PASS: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > src-tauri/gen/android/release.p12
-          cat > src-tauri/gen/android/keystore.properties <<EOF
-          password=$ANDROID_STORE_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          keyPassword=$ANDROID_KEY_PASSWORD
-          storeFile=$(pwd)/src-tauri/gen/android/release.p12
-          EOF
+          cd src-tauri/gen/android
+          printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > release.p12
+          if [ ! -s release.p12 ]; then echo "::error::ANDROID_KEYSTORE_BASE64 为空或 base64 无效"; exit 1; fi
+          {
+            printf 'storeFile=%s/release.p12\n' "$(pwd)"
+            printf 'keyAlias=%s\n' "$KS_ALIAS"
+            printf 'storePassword=%s\n' "$KS_STORE_PASS"
+            printf 'keyPassword=%s\n' "$KS_KEY_PASS"
+          } > keystore.properties
+          node ../../../scripts/inject-android-signing.mjs "$(pwd)"
+
+      # 校验密钥库可被 JDK 读取（密码/别名不匹配则尽早失败，避免构建到最后才发现）
+      - name: 验证密钥库（fail fast）
+        env:
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_STORE_PASS: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          if ! keytool -list -keystore src-tauri/gen/android/release.p12 -storetype PKCS12 \
+            -storepass "$KS_STORE_PASS" -alias "$KS_ALIAS" >/dev/null 2>&1; then
+            echo "::error::密钥库 / 密码 / 别名不匹配，请检查 ANDROID_KEYSTORE_BASE64 等 Secrets"; exit 1
+          fi
+          echo "密钥库校验通过"
 
       - name: 构建 Android 发布包（通用 APK + AAB）
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          NDK_HOME: ${{ env.NDK_HOME }}
         run: npx tauri android build --ci --apk --aab
 
       - name: 附加 APK / AAB 到 Release
@@ -231,11 +256,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          APK=$(find src-tauri/gen/android -path '*universal/release/*.apk' | head -1)
-          [ -z "$APK" ] && APK=$(find src-tauri/gen/android -name '*.apk' -path '*release*' | head -1)
-          AAB=$(find src-tauri/gen/android -name '*.aab' -path '*release*' | head -1)
-          [ -n "$APK" ] && gh release upload "$GITHUB_REF_NAME" --clobber "$APK"
-          [ -n "$AAB" ] && gh release upload "$GITHUB_REF_NAME" --clobber "$AAB"
+          find src-tauri/gen/android -name '*.apk' -path '*release*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
+          find src-tauri/gen/android -name '*.aab' -path '*release*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
 
   publish-updater:
     name: 合并更新器清单

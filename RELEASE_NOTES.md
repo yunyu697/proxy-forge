@@ -1,8 +1,8 @@
 # Release Notes
 
-## v1.2.0（2026-10-31）—— 全平台安装包 + Android
+## v1.2.1（2026-10-31）—— 全平台安装包 + Android（修复发布）
 
-在 v1.1.0（12 项工程增强：节点测速、订阅管理、保存到本机、深色模式、英文界面、ESLint/Prettier/vitest、Dependabot、更新器基建）基础上，补齐发布渠道：
+修复 v1.2.0 首版发布中三个打包 job 失败的问题（macOS/Windows/Android），并补齐全部安装包。在 v1.1.0（12 项工程增强）基础上，发布渠道包括：
 
 ### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
 
