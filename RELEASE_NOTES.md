@@ -1,5 +1,36 @@
 # Release Notes
 
+## v1.2.3（2026-10-31）—— Windows 便携包 + Android SDK 两处收尾修复
+
+v1.2.2 已修好 Windows 的图标与 Android 的 setup-android，Windows 的 `.exe`/`.msi` 与 Android 的 SDK 安装都越过了原来的失败点，但又各暴露一个新问题，本次一并修掉。
+
+### Windows —— `zip: command not found`
+
+- 根因：打包本身已经成功，失败发生在最后生成便携 zip 的步骤。Windows runner 的 Git bash 里没有 `zip` 命令，`-e` 下直接 exit 127
+- 修复：该步骤改用 PowerShell（`Compress-Archive`），并在 exe 不存在时显式报错，不再静默产出空包
+
+### Android —— `yes: standard output: Broken pipe`
+
+- 根因：Actions 的 bash 默认 `-e -o pipefail`。`yes | sdkmanager ...` 在 sdkmanager 正常结束后，`yes` 因 SIGPIPE 退出，整条管道被判为失败（exit 1），NDK 其实已经装完
+- 修复：改用有限长度的 here-string（`<<< "$LICENSES"`）自动应答许可，不再使用 `yes |` 管道
+
+### 顺带改进
+
+- `publish-updater` 改为 `always() && !cancelled()`：单个平台打包失败时仍会合并 `latest.json`，缺失平台留空，避免更新器清单整体丢失
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+> 升级说明：功能与 v1.2.1 / v1.2.2 完全一致，仅修复发布链路。
+
+---
+
 ## v1.2.2（2026-10-31）—— 修复 Windows / Android 打包失败
 
 v1.2.1 的 macOS 与 Linux 产物正常，但 Windows 与 Android 两个 job 在打包阶段失败，Release 因此缺少 Windows 安装包与 APK/AAB。本次只修发布链路，功能与 v1.2.1 完全一致。

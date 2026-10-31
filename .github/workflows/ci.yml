@@ -132,17 +132,21 @@ jobs:
         run: npm run tauri:build -- ${{ matrix.args }}
 
       # Windows：额外生成便携 zip（单 exe 绿色版，用户要求）
+      # 注意：Windows runner 的 Git bash 里没有 zip 命令（会 exit 127），改用 PowerShell 的 Compress-Archive。
       - name: 生成便携 zip（Windows）
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          cd src-tauri/target/release
-          rm -f "$RUNNER_TEMP/ProxyForge-portable-windows.zip"
-          if [ -d resources ]; then
-            zip -r "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ProxyForge.exe resources
-          else
-            zip -j "$RUNNER_TEMP/ProxyForge-portable-windows.zip" ProxyForge.exe
-          fi
+          $rel = (Resolve-Path "src-tauri/target/release").Path
+          $exe = Join-Path $rel "ProxyForge.exe"
+          if (-not (Test-Path $exe)) { throw "未找到 $exe，打包未产出可执行文件" }
+          $out = Join-Path $env:RUNNER_TEMP "ProxyForge-portable-windows.zip"
+          if (Test-Path $out) { Remove-Item $out -Force }
+          $items = @($exe)
+          $res = Join-Path $rel "resources"
+          if (Test-Path $res) { $items += $res }
+          Compress-Archive -Path $items -DestinationPath $out -CompressionLevel Optimal
+          Get-Item $out | Format-List Name, Length
 
       - name: 上传构建产物（备份）
         uses: actions/upload-artifact@v4
@@ -213,13 +217,17 @@ jobs:
 
       # NDK 是 Rust 交叉编译 Android 原生库的必需组件；Tauri CLI 不会自动下载 NDK，必须显式安装并设 NDK_HOME。
       # Tauri 2.12 生成的模板 compileSdk=36，因此一并安装对应 platform 与 build-tools。
+      # 注意：这里不能用 `yes | sdkmanager ...`。Actions 的 bash 默认 `-e -o pipefail`，
+      # sdkmanager 正常结束后 yes 会收到 SIGPIPE（yes: standard output: Broken pipe），
+      # 整条管道被判为失败（exit 1）。改用有限长度的 here-string 自动应答许可。
       - name: 安装 NDK / SDK 平台 / 构建工具
         shell: bash
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          yes | sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          LICENSES="$(printf 'y\n%.0s' {1..200})"
+          sdkmanager --licenses <<< "$LICENSES" > /dev/null 2>&1 || true
+          sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0" <<< "$LICENSES"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          ls "$ANDROID_HOME/ndk"
+          ls -1 "$ANDROID_HOME/ndk"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -281,7 +289,8 @@ jobs:
   publish-updater:
     name: 合并更新器清单
     needs: desktop
-    if: startsWith(github.ref, 'refs/tags/v')
+    # 即使某个平台打包失败也要尝试合并，避免 latest.json 完全缺失（缺失平台在清单里留空）
+    if: always() && !cancelled() && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
