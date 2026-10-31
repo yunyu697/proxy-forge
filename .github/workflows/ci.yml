@@ -191,16 +191,35 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 安装 Android SDK
-        uses: android-actions/setup-android@v3
+      # runner 镜像已预装 Android SDK（/usr/local/lib/android/sdk）。
+      # 注意：不要再使用 android-actions/setup-android@v3 —— 它内部会执行 sdkmanager 安装已被
+      # cmdline-tools 16.0 移除的 "tools" 包，直接以 exit 1 失败。这里改为复用预装 SDK 并定位 sdkmanager。
+      - name: 配置 Android SDK 环境
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK_ROOT" ]; then echo "::error::未找到预装 Android SDK：$SDK_ROOT"; exit 1; fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          CMDLINE_BIN=""
+          for d in "$SDK_ROOT"/cmdline-tools/*/bin; do
+            if [ -x "$d/sdkmanager" ]; then CMDLINE_BIN="$d"; break; fi
+          done
+          if [ -z "$CMDLINE_BIN" ]; then echo "::error::未找到 sdkmanager（$SDK_ROOT/cmdline-tools/*/bin）"; exit 1; fi
+          echo "$CMDLINE_BIN" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "sdkmanager: $CMDLINE_BIN"
+          "$CMDLINE_BIN/sdkmanager" --version
 
       # NDK 是 Rust 交叉编译 Android 原生库的必需组件；Tauri CLI 不会自动下载 NDK，必须显式安装并设 NDK_HOME。
       # Tauri 2.12 生成的模板 compileSdk=36，因此一并安装对应 platform 与 build-tools。
       - name: 安装 NDK / SDK 平台 / 构建工具
+        shell: bash
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          yes | sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          ls "$ANDROID_HOME/ndk"
 
       - uses: dtolnay/rust-toolchain@stable
         with:

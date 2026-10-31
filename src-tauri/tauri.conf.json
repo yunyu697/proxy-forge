@@ -34,7 +34,11 @@
     "shortDescription": "mihomo / sing-box 配置生成器",
     "longDescription": "导入代理协议链接，按设备形态与使用场景引导式生成 mihomo (Clash.Meta) 与 sing-box 配置文件。",
     "icon": [
-      "icons/icon.png"
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }

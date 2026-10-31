@@ -1,5 +1,32 @@
 # Release Notes
 
+## v1.2.2（2026-10-31）—— 修复 Windows / Android 打包失败
+
+v1.2.1 的 macOS 与 Linux 产物正常，但 Windows 与 Android 两个 job 在打包阶段失败，Release 因此缺少 Windows 安装包与 APK/AAB。本次只修发布链路，功能与 v1.2.1 完全一致。
+
+### Windows —— `Couldn't find a .ico icon`
+
+- 根因：`tauri.conf.json` 的 `bundle.icon` 只列了 `icons/icon.png`。Rust 编译已成功，但 NSIS/MSI 打包器要求在 icon 列表中出现 `.ico`，找不到即中止
+- 修复：icon 数组补全为 `32x32.png` / `128x128.png` / `128x128@2x.png` / `icon.icns` / `icon.ico`
+
+### Android —— `Failed to find package 'tools'`
+
+- 根因：`android-actions/setup-android@v3` 内部调用 sdkmanager 安装 `tools` 包，而 runner 上的 cmdline-tools 16.0 已移除该包，action 直接以 exit 1 失败
+- 修复：弃用该 action，直接复用 runner 预装的 `/usr/local/lib/android/sdk`，自动探测 `cmdline-tools/*/bin` 下的 `sdkmanager` 写入 `PATH`；NDK / platform / build-tools 安装改为 `yes |` 自动接受许可
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+> 升级说明：与 v1.2.1 二进制行为一致，仅是发布产物补齐。
+
+---
+
 ## v1.2.1（2026-10-31）—— 全平台安装包 + Android（修复发布）
 
 修复 v1.2.0 首版发布中三个打包 job 失败的问题（macOS/Windows/Android），并补齐全部安装包。在 v1.1.0（12 项工程增强）基础上，发布渠道包括：
