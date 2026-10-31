@@ -71,6 +71,24 @@ function mbps(v?: string): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
+/** sing-box 1.12 的带宽写法（"100 Mbps"），缺省给 100 Mbps */
+function toBandwidth(v?: string): string {
+  const n = mbps(v);
+  return `${n && n > 0 ? n : 100} Mbps`;
+}
+
+/**
+ * 端口跳跃：mihomo 的 `ports`（"1000-3000,443"）→ sing-box 的 `server_ports`（["1000:3000","443"]）。
+ * sing-box 没有 `ports` 字段，写错会直接 decode 失败。
+ */
+function toServerPorts(v: string): string[] {
+  return v
+    .split(/[,\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => x.replace('-', ':'));
+}
+
 function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion']): Record<string, unknown> {
   const isNew = version === '1.12';
   const base: Record<string, unknown> = {
@@ -116,30 +134,32 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
       break;
     }
     case 'hysteria': {
+      // 带宽是 hysteria 的必填项，缺了 sing-box 会以 "missing upload speed" 拒绝启动
       if (isNew) {
-        if (n.up) base.up = n.up.endsWith('Mbps') ? n.up : `${n.up} Mbps`;
-        if (n.down) base.down = n.down.endsWith('Mbps') ? n.down : `${n.down} Mbps`;
+        base.up = toBandwidth(n.up);
+        base.down = toBandwidth(n.down);
       } else {
-        if (n.up) base.up_mbps = mbps(n.up);
-        if (n.down) base.down_mbps = mbps(n.down);
+        base.up_mbps = mbps(n.up) ?? 100;
+        base.down_mbps = mbps(n.down) ?? 100;
       }
       if (n.authStr) base.auth_str = n.authStr;
       if (n.obfsPassword) base.obfs = n.obfsPassword;
-      if (n.hopPorts) base.ports = n.hopPorts;
-      base.alpn = n.alpn?.length ? n.alpn : ['hysteria'];
+      // 端口跳跃：sing-box 用 server_ports（"443:8443" 数组），没有 mihomo 的 ports 字段
+      if (n.hopPorts) base.server_ports = toServerPorts(n.hopPorts);
+      // alpn 是 TLS 层字段，不能放 outbound 顶层（否则 decode 报 unknown field "alpn"）
       break;
     }
     case 'hysteria2': {
       base.password = n.password;
       if (isNew) {
-        if (n.up) base.up = n.up.endsWith('Mbps') ? n.up : `${n.up} Mbps`;
-        if (n.down) base.down = n.down.endsWith('Mbps') ? n.down : `${n.down} Mbps`;
+        base.up = toBandwidth(n.up);
+        base.down = toBandwidth(n.down);
       } else {
-        if (n.up) base.up_mbps = mbps(n.up);
-        if (n.down) base.down_mbps = mbps(n.down);
+        base.up_mbps = mbps(n.up) ?? 100;
+        base.down_mbps = mbps(n.down) ?? 100;
       }
       if (n.obfsPassword) base.obfs = { type: 'salamander', password: n.obfsPassword };
-      if (n.hopPorts) base.ports = n.hopPorts;
+      if (n.hopPorts) base.server_ports = toServerPorts(n.hopPorts);
       break;
     }
     case 'tuic': {
@@ -153,7 +173,7 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
     }
     case 'anytls': {
       base.password = n.password;
-      if (n.fingerprint) base.utls = { enabled: true, fingerprint: n.fingerprint };
+      // utls 属于 TLS 层字段，在下面的 tls 块里统一处理
       break;
     }
     case 'wireguard': {
@@ -181,17 +201,24 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
     }
   }
 
-  if (n.type !== 'wireguard' && n.type !== 'hysteria' && n.type !== 'hysteria2' && n.type !== 'tuic') {
-    const tls = tlsObject(n, isNew);
-    if (tls) base.tls = tls;
-  } else if (n.type === 'hysteria' || n.type === 'hysteria2' || n.type === 'tuic') {
+  // trojan / anytls / hysteria / hysteria2 / tuic 都属于强制 TLS 的协议：
+  // 节点上没有显式 tls 标记也必须写 tls 块，否则 sing-box 报 "TLS required" 拒绝启动。
+  const forcedTls = n.type === 'trojan' || n.type === 'anytls' || n.type === 'hysteria' || n.type === 'hysteria2' || n.type === 'tuic';
+  if (forcedTls) {
     const tls: Record<string, unknown> = { enabled: true };
     const sni = n.sni || n.server;
     if (sni) tls.server_name = sni;
-    if (n.type === 'tuic') tls.alpn = n.alpn?.length ? n.alpn : ['h3'];
-    else if (n.alpn?.length) tls.alpn = n.alpn;
+    // hysteria v1 默认 alpn 是 hysteria，hysteria2 / tuic 是 h3，其余协议不设默认
+    const defaultAlpn =
+      n.type === 'hysteria' ? ['hysteria'] : n.type === 'hysteria2' || n.type === 'tuic' ? ['h3'] : undefined;
+    const alpn = n.alpn?.length ? n.alpn : defaultAlpn;
+    if (alpn) tls.alpn = alpn;
     if (n.skipCertVerify) tls.insecure = true;
+    if (n.fingerprint) tls.utls = { enabled: true, fingerprint: n.fingerprint };
     base.tls = tls;
+  } else if (n.type !== 'wireguard') {
+    const tls = tlsObject(n, isNew);
+    if (tls) base.tls = tls;
   }
 
   const transport = transportObject(n);
@@ -199,6 +226,38 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
 
   if (n.udp) base.udp_fragment = false;
   return base;
+}
+
+/**
+ * WireGuard 在 sing-box 1.11+ 必须写成 endpoint 形态（outbound 形态 1.12 起直接 FATAL）。
+ * endpoints 的 tag 可以被 selector / urltest 引用，所以节点名照旧出现在策略组里。
+ */
+function nodeToWireguardEndpoint(n: ProxyNode): Record<string, unknown> {
+  const reserved = n.wgReserved
+    ? n.wgReserved
+        .split(/[,\s]+/)
+        .map(Number)
+        .filter(Number.isFinite)
+    : undefined;
+
+  const endpoint: Record<string, unknown> = {
+    type: 'wireguard',
+    tag: n.name,
+    address: n.wgLocalAddress ? n.wgLocalAddress.split(',').map((s) => s.trim()) : ['10.0.0.2/32'],
+    private_key: n.wgPrivateKey,
+    peers: [
+      {
+        address: n.server,
+        port: n.port,
+        public_key: n.wgPeerPublicKey,
+        ...(n.wgPreSharedKey ? { pre_shared_key: n.wgPreSharedKey } : {}),
+        ...(reserved && reserved.length === 3 ? { reserved } : {}),
+        allowed_ips: ['0.0.0.0/0', '::/0'],
+      },
+    ],
+  };
+  if (n.wgMtu) endpoint.mtu = n.wgMtu;
+  return endpoint;
 }
 
 export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan: ConfigPlan): string {
@@ -308,16 +367,25 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
       type: g.type === 'urltest' ? 'urltest' : 'selector',
       tag: g.label,
       outbounds: g.type === 'urltest' ? [...proxyTags] : ['🚀 节点选择', ...proxyTags, 'direct'],
-      default: '🚀 节点选择',
+      // default 只有 selector 认；urltest 带这个字段会报 unknown field "default"
       ...(g.type === 'urltest'
         ? { url: options.urlTestUrl, interval: `${options.urlTestInterval}s`, tolerance: 50 }
-        : {}),
+        : { default: '🚀 节点选择' }),
     });
   }
   outbounds.push({ type: 'direct', tag: 'direct' });
-  outbounds.push({ type: 'block', tag: 'block' });
-  outbounds.push({ type: 'dns', tag: 'dns-out' });
-  for (const n of active) outbounds.push(nodeToSingbox(n, options.singboxVersion));
+  // 注意：这里不能声明 `block` / `dns` 这两个 legacy 特殊 outbound。
+  // sing-box 1.11 起弃用它们，1.12 起直接 FATAL 拒绝启动：
+  //   "legacy special outbounds is deprecated ... set ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS=true"
+  // 拦截与 DNS 劫持已全部由 route.rules 的 action: reject / hijack-dns 承担，无需占位。
+  //
+  // WireGuard 同理：1.11 起 outbound 形态被弃用、1.12 起 FATAL，必须写成 endpoints。
+  // endpoints 的 tag 同样可以被 proxy-groups 引用，所以节点名照旧可用。
+  for (const n of active) {
+    if (n.type !== 'wireguard') outbounds.push(nodeToSingbox(n, options.singboxVersion));
+  }
+  const wgEndpoints = active.filter((n) => n.type === 'wireguard').map(nodeToWireguardEndpoint);
+  if (wgEndpoints.length) cfg.endpoints = wgEndpoints;
   cfg.outbounds = outbounds;
 
   /* -------------------------------- Route ------------------------------ */
@@ -344,7 +412,7 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
       }
       continue;
     }
-    if (r.action === 'reject') {
+    if (r.action === 'reject' || r.target === 'REJECT') {
       routeRules.push({ action: 'reject', rule_set: [r.ruleSetKey] });
     } else {
       routeRules.push({ action: 'route', rule_set: [r.ruleSetKey], outbound: mapTarget(r.target) });
@@ -379,7 +447,8 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
   };
 
   cfg.ntp = {
-    enable: true,
+    // sing-box 统一用 enabled，写成 enable 会 decode 失败（unknown field "enable"）
+    enabled: true,
     server: 'time.apple.com',
     server_port: 123,
     interval: '30m',

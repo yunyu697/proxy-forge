@@ -278,6 +278,10 @@ export function buildMihomo(nodes: ProxyNode[], options: GenerateOptions, plan: 
     'enhanced-mode': options.fakeIp ? 'fake-ip' : 'redir-host',
     nameserver: splitDns(options.dnsDirect),
     fallback: splitDns(options.dnsRemote),
+    // respect-rules 为 true 时 mihomo 强制要求此项非空，否则整份配置拒绝加载：
+    //   "if "respect-rules" is turned on, "proxy-server-nameserver" cannot be empty"
+    // 它负责在不经代理的前提下解析节点域名，所以只能填「本身不需要再解析」的地址。
+    'proxy-server-nameserver': plainDnsOf(options.dnsDirect),
     'fallback-filter': { geoip: true, 'geoip-code': 'CN', ipcidr: ['240.0.0.0/4', '0.0.0.0/32'] },
   };
   if (options.fakeIp) {
@@ -342,7 +346,9 @@ export function buildMihomo(nodes: ProxyNode[], options: GenerateOptions, plan: 
   });
   groups.push({
     name: '♻️ 自动选择',
-    type: 'urltest',
+    // mihomo 只认带连字符的 url-test；写 urltest 会被 adapter/outboundgroup/parser.go
+    // 判为 `unsupported type: urltest` 而整份配置加载失败
+    type: 'url-test',
     proxies: [...proxyNames],
     url: options.urlTestUrl,
     interval: options.urlTestInterval,
@@ -353,7 +359,7 @@ export function buildMihomo(nodes: ProxyNode[], options: GenerateOptions, plan: 
     if (g.type === 'reject') continue;
     groups.push({
       name: g.label,
-      type: g.type === 'urltest' ? 'urltest' : 'select',
+      type: g.type === 'urltest' ? 'url-test' : 'select',
       proxies: g.type === 'urltest' ? [...proxyNames] : ['🚀 节点选择', ...proxyNames, 'DIRECT'],
       url: g.type === 'urltest' ? options.urlTestUrl : undefined,
       interval: g.type === 'urltest' ? options.urlTestInterval : undefined,
@@ -422,6 +428,24 @@ function splitDns(v: string): string[] {
     .split(/[,\n]/)
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+/**
+ * 从直连 DNS 列表里挑出「无需再解析」的地址，供 proxy-server-nameserver 使用。
+ *
+ * DoH 形如 https://223.5.5.5/dns-query，主机部分本身就是 IP，可以直接用；
+ * 若用户填的是 https://dns.alidns.com/dns-query 这种域名型 DoH，会解析失败
+ * （解析它自己又需要 DNS），此时回退到公共明文 DNS。
+ */
+function plainDnsOf(v: string): string[] {
+  const out: string[] = [];
+  for (const raw of splitDns(v)) {
+    const host = raw.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split('/')[0].replace(/^\[|\]$/g, '');
+    const isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+    const isIpv6 = host.includes(':') && /^[0-9a-f:.]+$/i.test(host);
+    if (isIpv4 || isIpv6) out.push(host);
+  }
+  return out.length ? out : ['223.5.5.5', '119.29.29.29'];
 }
 
 function header(options: GenerateOptions, plan: ConfigPlan): string {

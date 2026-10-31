@@ -1,5 +1,39 @@
 # Release Notes
 
+## v1.2.9（2026-11-01）—— 修复生成配置无法加载（mihomo / sing-box 双内核）
+
+这一版把两个内核真正拉起来跑了一遍配置自检，修掉 8 处会让内核**拒绝加载**的字段错误。之前这些问题都只在纸面上"看起来对"，实际导入即报错。
+
+### mihomo
+
+- **`type: urltest` → `type: url-test`**：mihomo 的 `adapter/outboundgroup/parser.go` 只认带连字符的写法，`urltest` 会走到 `default` 分支返回 `unsupported type: urltest`，整份配置加载失败（这就是你看到的那条报错）
+- **补 `dns.proxy-server-nameserver`**：`respect-rules: true` 时 mihomo 强制要求该字段非空，否则报 `if "respect-rules" is turned on, "proxy-server-nameserver" cannot be empty`。取值只保留 IP 字面量（`https://223.5.5.5/dns-query` 取主机部分），域名型 DoH 会回退到 `223.5.5.5 / 119.29.29.29`，避免"解析 DNS 自己还要 DNS"的死循环
+
+### sing-box（1.11 / 1.12）
+
+- **删除 `block` / `dns` 两个 legacy outbound**：1.12 起直接 FATAL（`ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS`）。这两个 tag 其实从未被任何规则引用，拦截与 DNS 劫持早已由 `route.rules` 的 `action: reject / hijack-dns` 承担
+- **`urltest` 组去掉 `default`**：该字段只有 `selector` 认，写在 urltest 上会 `unknown field "default"`
+- **`alpn` 移入 `tls`**：hysteria 原来写在 outbound 顶层，`unknown field "alpn"`
+- **强制 TLS 的协议补 `tls` 块**：trojan / anytls / hysteria2 在节点没有 `tls` 标记时也必须写，否则 `TLS required`
+- **WireGuard 改为 `endpoints`**：outbound 形态 1.12 起 FATAL（`ENABLE_DEPRECATED_WIREGUARD_OUTBOUND`）。tag 不变，策略组引用照旧
+- **`ports` → `server_ports`**：端口跳跃的字段名是 sing-box 特有的，`ports` 会 decode 失败
+- **`ntp.enable` → `ntp.enabled`**：sing-box 全项目统一用 `enabled`
+- **hysteria / hysteria2 带宽补默认值**：缺 `up` / `down` 会报 `missing upload speed`，现按 100 Mbps 兜底
+- **剥离 Shadowsocks 插件并告警**：sing-box 的 `plugin` 是 SIP003 外部插件二进制，内核不内置 obfs，保留会 `plugin not found: obfs` 启动失败
+
+### 验证方式
+
+不再靠肉眼，直接拿官方二进制跑：
+
+```
+mihomo v1.19.33        → mihomo -t -f cfg.yaml        （11 份场景配置全绿）
+sing-box 1.12.25       → sing-box check -c cfg.json    （11 份场景配置全绿）
+```
+
+覆盖客户端 / 旁路由 / 主路由 × TUN 开关 × 全场景 / 全局 / 无 fake-ip / 拦截 QUIC + IPv6 等组合。新增 `src/core/builders.test.ts` 12 项回归用例，把上述每条都钉住。
+
+---
+
 ## v1.2.8（2026-10-31）—— 内置更新检查（不依赖签名密钥）
 
 ### 新增：启动后自动检查新版本

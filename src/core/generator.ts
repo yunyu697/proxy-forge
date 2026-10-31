@@ -107,6 +107,19 @@ export function buildPlan(nodes: ProxyNode[], options: GenerateOptions): ConfigP
       usable = usable.filter((n) => n.type !== 'shadowsocksr');
       warnings.push(`已跳过 ${ssr.length} 个 ShadowsocksR 节点，sing-box 不支持该协议`);
     }
+
+    // sing-box 的 ss plugin 走 SIP003 外部插件二进制（obfs-local / v2ray-plugin），内核不内置。
+    // 保留 plugin 字段会让 sing-box 启动即失败（plugin not found: obfs），
+    // 一个节点拖垮整份配置不划算，这里剥掉插件并告警。
+    const withPlugin = usable.filter((n) => n.type === 'shadowsocks' && n.plugin);
+    if (withPlugin.length) {
+      usable = usable.map((n) =>
+        n.type === 'shadowsocks' && n.plugin ? { ...n, plugin: undefined, pluginOpts: undefined } : n,
+      );
+      warnings.push(
+        `已忽略 ${withPlugin.length} 个 Shadowsocks 节点的插件（obfs / v2ray-plugin）：sing-box 需自行安装 SIP003 插件二进制，内核不内置`,
+      );
+    }
   }
 
   // 游戏场景里用户选了关闭 UDP
@@ -337,7 +350,13 @@ export function buildPlan(nodes: ProxyNode[], options: GenerateOptions): ConfigP
 /** 预处理节点（协议兼容、UDP 开关等），供 builder 使用 */
 export function prepareNodes(nodes: ProxyNode[], options: GenerateOptions): ProxyNode[] {
   let list = nodes.filter((n) => n.enabled);
-  if (options.core === 'singbox') list = list.filter((n) => n.type !== 'shadowsocksr');
+  if (options.core === 'singbox') {
+    list = list
+      .filter((n) => n.type !== 'shadowsocksr')
+      // sing-box 的 ss plugin 是 SIP003 外部插件二进制，内核不内置 obfs / v2ray-plugin。
+      // 保留该字段会让 sing-box 启动直接失败（plugin not found: obfs），因此统一剥离。
+      .map((n) => (n.type === 'shadowsocks' && n.plugin ? { ...n, plugin: undefined, pluginOpts: undefined } : n));
+  }
   if ((options.scenarioAnswers['game']?.udp || []).includes('off')) {
     list = list.map((n) => ({ ...n, udp: false }));
   }
