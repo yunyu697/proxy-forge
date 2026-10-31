@@ -13,6 +13,7 @@
     "sync-version": "node scripts/sync-version.mjs",
     "preversion": "npm run lint && npm run typecheck && npm test",
     "version": "npm run sync-version && git add -A",
+    "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "lint": "eslint src scripts",

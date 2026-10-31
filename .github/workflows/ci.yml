@@ -306,13 +306,15 @@ jobs:
       - name: 构建 Android 发布包（通用 APK + AAB）
         run: npx tauri android build --ci --apk --aab
 
+      # 产物路径：app/build/outputs/apk/universal/release/*.apk
+      #           app/build/outputs/bundle/universalRelease/*.aab（注意大写 R，不能用 -path '*release*' 过滤）
       - name: 附加 APK / AAB 到 Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          find src-tauri/gen/android -name '*.apk' -path '*release*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
-          find src-tauri/gen/android -name '*.aab' -path '*release*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
+          find src-tauri/gen/android -name '*.apk' -path '*/outputs/*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
+          find src-tauri/gen/android -name '*.aab' -path '*/outputs/*' -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
 
   publish-updater:
     name: 合并更新器清单

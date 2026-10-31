@@ -1,5 +1,15 @@
 # Release Notes
 
+## v1.2.7（2026-10-31）—— 只差 Android：补齐 tauri npm script
+
+v1.2.6 里 macOS / Windows / Linux 三个桌面端全部成功（dmg、exe、msi、便携 zip、AppImage、deb、rpm、latest.json 齐全），Android 仍失败。
+
+### Android —— `npm error Missing script: "tauri"`
+
+- 根因：Tauri 的 Android Gradle 插件（`buildSrc/.../BuildTask.kt`）编译原生库时执行的是 `npm run -- tauri android android-studio-script --release --target <abi>`，它要求 `package.json` 里存在名为 `tauri` 的 script。本项目此前只有 `tauri:dev` / `tauri:build`，于是 gradle 的 `rustBuildArm64Release`、`rustBuildArmRelease` 两个任务都以 `Process 'command 'npm'' finished with non-zero exit value 1` 失败
+- 修复：`package.json` 增加 `"tauri": "tauri"`（指向 node_modules/.bin 里的 Tauri CLI）
+- 顺带修上传路径：AAB 输出在 `bundle/universalRelease/`（大写 R），原来的 `-path '*release*'` 匹配不到，改为 `-path '*/outputs/*'`
+
 ## v1.2.6（2026-10-31）—— 只差 Android：对齐 SDK Platform
 
 v1.2.5 里 macOS / Windows / Linux 全部产物已经齐全（dmg、exe、msi、便携 zip、AppImage、deb、rpm、latest.json），只剩 Android。
