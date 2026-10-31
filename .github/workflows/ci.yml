@@ -72,18 +72,21 @@ jobs:
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin --bundles dmg
             bundle_path: src-tauri/target/universal-apple-darwin/release/bundle/**
+            bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
             platform: darwin
           - os: windows-latest
             label: Windows
             targets: ''
             args: --bundles nsis,msi
             bundle_path: src-tauri/target/release/bundle/**
+            bundle_dir: src-tauri/target/release/bundle
             platform: windows
           - os: ubuntu-22.04
             label: Linux
             targets: ''
             args: --bundles appimage,deb,rpm
             bundle_path: src-tauri/target/release/bundle/**
+            bundle_dir: src-tauri/target/release/bundle
             platform: linux
     runs-on: ${{ matrix.os }}
     steps:
@@ -165,12 +168,14 @@ jobs:
         run: node scripts/gen-updater-manifest.mjs "updater-${{ matrix.platform }}.json"
 
       # 跨平台兼容的上传（macOS 自带 bash 3.2 不支持 mapfile，统一用 find -print0 | xargs）
+      # 只从 bundle 目录取安装包：target 目录下还有 build-script-build.exe 等构建脚本产物，
+      # 之前按 src-tauri/target 全量 find 会把它们一起传上 Release（同名冲突还会 404）。
       - name: 附加产物到 Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          find src-tauri/target -type f \( \
+          find "${{ matrix.bundle_dir }}" -type f \( \
             -name '*.dmg' -o -name '*.exe' -o -name '*.msi' \
             -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
             -print0 | xargs -0 -r gh release upload "$GITHUB_REF_NAME" --clobber
@@ -219,16 +224,17 @@ jobs:
           "$CMDLINE_BIN/sdkmanager" --version
 
       # NDK 是 Rust 交叉编译 Android 原生库的必需组件；Tauri CLI 不会自动下载 NDK，必须显式安装并设 NDK_HOME。
-      # Tauri 2.12 生成的模板 compileSdk=36，因此一并安装对应 platform 与 build-tools。
       # 注意：这里不能用 `yes | sdkmanager ...`。Actions 的 bash 默认 `-e -o pipefail`，
       # sdkmanager 正常结束后 yes 会收到 SIGPIPE（yes: standard output: Broken pipe），
       # 整条管道被判为失败（exit 1）。改用有限长度的 here-string 自动应答许可。
-      - name: 安装 NDK / SDK 平台 / 构建工具
+      # SDK Platform 不在这里装：模板的 compileSdk 会随 Tauri 版本变化（本次已从 36 变 37），
+      # 放到 init 之后按实际值安装，避免写死版本号后又一次 "Failed to find target android-XX"。
+      - name: 安装 NDK
         shell: bash
         run: |
           LICENSES="$(printf 'y\n%.0s' {1..200})"
           sdkmanager --licenses <<< "$LICENSES" > /dev/null 2>&1 || true
-          sdkmanager "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0" <<< "$LICENSES"
+          sdkmanager "ndk;27.2.12479018" <<< "$LICENSES"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           ls -1 "$ANDROID_HOME/ndk"
 
@@ -246,6 +252,19 @@ jobs:
       # 现场生成 Android 工程脚手架（仓库不提交 gen/android）；--skip-targets-install 复用上面已装的 Rust 目标
       - name: 初始化 Android 工程
         run: npx tauri android init --ci --skip-targets-install
+
+      # 按模板实际的 compileSdk 安装对应 platform（AGP 不会自动补装 platform，缺了会直接报
+      # "Failed to find target with hash string 'android-XX'"）
+      - name: 安装与模板匹配的 SDK Platform
+        shell: bash
+        run: |
+          SDK_API="$(grep -oE 'compileSdk *= *[0-9]+' src-tauri/gen/android/app/build.gradle.kts | head -1 | grep -oE '[0-9]+' || true)"
+          echo "模板 compileSdk = ${SDK_API:-未知}"
+          if [ -n "$SDK_API" ]; then
+            LICENSES="$(printf 'y\n%.0s' {1..200})"
+            sdkmanager "platforms;android-$SDK_API" <<< "$LICENSES"
+          fi
+          ls -1 "$ANDROID_HOME/platforms"
 
       # 从仓库 Secret 解码同一份签名密钥库，并注入 gradle 签名配置，保证每次构建签名一致（应用可增量更新）
       - name: 写入签名密钥库并注入 gradle 签名

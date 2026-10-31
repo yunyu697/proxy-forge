@@ -1,5 +1,42 @@
 # Release Notes
 
+## v1.2.5（2026-10-31）—— Android Gradle 脚本与 Release 上传修正
+
+v1.2.4 已把 Android 推进到 Gradle 构建阶段、Windows 也成功产出安装包，但两处仍有问题。
+
+### Android —— Gradle 脚本编译失败
+
+`app/build.gradle.kts` 里注入的签名配置报三个错：
+
+```
+Line 17: android {  'fun Project.android(Action<BaseAppModuleExtension>)' is deprecated ...
+Line 32: val keystoreProperties = java.util.Properties()   Unresolved reference 'util'
+Line 34: keystoreProperties.load(java.io.FileInputStream(...))  Unresolved reference 'io'
+```
+
+- 根因：Kotlin DSL 里 `java` 是 `JavaPluginExtension` 扩展，不是包名，所以 `java.util.Properties()` / `java.io.FileInputStream()` 都无法解析
+- 修复：`scripts/inject-android-signing.mjs` 改为自动补齐 `import java.util.Properties` 与 `import java.io.FileInputStream`，注入代码使用短类名；并加 `@file:Suppress("DEPRECATION_ERROR")` 兜底 AGP 9 旧 DSL 访问器的弃用升级
+- 顺带修掉一个真 bug：原来读的是 `keystoreProperties["password"]`（不存在的键），现在正确读 `storePassword` / `keyPassword`
+- 模板 `compileSdk` 从 36 变成 37，改为 `tauri android init` 之后按生成文件里的实际值安装对应 `platforms;android-XX`，不再写死
+
+### Windows —— Release 上传失败
+
+- 根因：上传步骤对整个 `src-tauri/target` 目录 `find *.exe`，把 `build-script-build.exe`、`build_script_build-*.exe` 这些构建脚本产物也传了上去，同名冲突后 `gh release upload` 返回 HTTP 404
+- 修复：只从各平台 `bundle` 目录取安装包（新增 matrix 字段 `bundle_dir`）
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+> 升级说明：应用功能与 v1.2.1 一致，本版只修发布链路。
+
+---
+
 ## v1.2.4（2026-10-31）—— 补齐 Android 库目标 + Windows 便携包命名
 
 v1.2.3 里 `latest.json` 已能正常合并，但 Android 与 Windows 仍各差最后一步。
