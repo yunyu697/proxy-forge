@@ -253,18 +253,24 @@ jobs:
       - name: 初始化 Android 工程
         run: npx tauri android init --ci --skip-targets-install
 
-      # 按模板实际的 compileSdk 安装对应 platform（AGP 不会自动补装 platform，缺了会直接报
-      # "Failed to find target with hash string 'android-XX'"）
-      - name: 安装与模板匹配的 SDK Platform
+      # runner 镜像自带若干 SDK Platform（android-3x）。Tauri 模板的 compileSdk 会随版本上涨，
+      # 而 Google 仓库里不一定有对应的整数版本（例如 37 只有 android-37.1 / 37.2，没有 android-37），
+      # 直接 sdkmanager 安装会报 "Failed to find package 'platforms;android-37'"。
+      # 因此改为把模板对齐到 runner 已安装的最高整数平台，不依赖远端仓库。
+      - name: 对齐 SDK Platform
         shell: bash
         run: |
-          SDK_API="$(grep -oE 'compileSdk *= *[0-9]+' src-tauri/gen/android/app/build.gradle.kts | head -1 | grep -oE '[0-9]+' || true)"
-          echo "模板 compileSdk = ${SDK_API:-未知}"
-          if [ -n "$SDK_API" ]; then
-            LICENSES="$(printf 'y\n%.0s' {1..200})"
-            sdkmanager "platforms;android-$SDK_API" <<< "$LICENSES"
+          FILE=src-tauri/gen/android/app/build.gradle.kts
+          echo "已安装平台: $(ls -1 "$ANDROID_HOME/platforms" 2>/dev/null | tr '\n' ' ')"
+          WANT="$(grep -oE 'compileSdk *= *[0-9]+' "$FILE" | head -1 | grep -oE '[0-9]+')"
+          HAVE="$(ls -1 "$ANDROID_HOME/platforms" 2>/dev/null | grep -E '^android-[0-9]+$' | sed 's/android-//' | sort -n | tail -1)"
+          echo "模板 compileSdk=$WANT，runner 最高整数平台=$HAVE"
+          if [ -z "$HAVE" ]; then echo "::error::runner 没有可用的 android-XX 平台"; exit 1; fi
+          if [ "$WANT" != "$HAVE" ]; then
+            echo "改写 compileSdk / targetSdk：$WANT -> $HAVE"
+            sed -i -E "s/compileSdk = $WANT/compileSdk = $HAVE/; s/targetSdk = $WANT/targetSdk = $HAVE/" "$FILE"
           fi
-          ls -1 "$ANDROID_HOME/platforms"
+          grep -nE 'compileSdk|targetSdk' "$FILE"
 
       # 从仓库 Secret 解码同一份签名密钥库，并注入 gradle 签名配置，保证每次构建签名一致（应用可增量更新）
       - name: 写入签名密钥库并注入 gradle 签名

@@ -1,5 +1,27 @@
 # Release Notes
 
+## v1.2.6（2026-10-31）—— 只差 Android：对齐 SDK Platform
+
+v1.2.5 里 macOS / Windows / Linux 全部产物已经齐全（dmg、exe、msi、便携 zip、AppImage、deb、rpm、latest.json），只剩 Android。
+
+### Android —— `Failed to find package 'platforms;android-37'`
+
+- 根因：Tauri 2.12 模板的 `compileSdk = 37`，但 Google 仓库里 API 37 只发布了 `platforms;android-37.1` / `android-37.2`，**不存在** `platforms;android-37`，`sdkmanager` 直接报找不到包
+- 修复：不再依赖远端仓库按名字装，改为在 `tauri android init` 之后读取模板的 `compileSdk`，与 runner 已安装的最高整数平台（`$ANDROID_HOME/platforms/android-XX`）比对，不一致就把 `compileSdk` / `targetSdk` 改写为该平台，AGP 会自动补齐对应 build-tools
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+> 升级说明：应用功能与 v1.2.1 一致，本版只修发布链路。
+
+---
+
 ## v1.2.5（2026-10-31）—— Android Gradle 脚本与 Release 上传修正
 
 v1.2.4 已把 Android 推进到 Gradle 构建阶段、Windows 也成功产出安装包，但两处仍有问题。
