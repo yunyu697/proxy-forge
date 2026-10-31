@@ -1,7 +1,7 @@
 {
   "name": "proxy-forge",
   "private": true,
-  "version": "1.2.4",
+  "version": "1.2.5",
   "type": "module",
   "description": "代理工坊 - mihomo / sing-box 配置生成器",
   "scripts": {
