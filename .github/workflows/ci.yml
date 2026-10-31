@@ -132,17 +132,20 @@ jobs:
         run: npm run tauri:build -- ${{ matrix.args }}
 
       # Windows：额外生成便携 zip（单 exe 绿色版，用户要求）
-      # 注意：Windows runner 的 Git bash 里没有 zip 命令（会 exit 127），改用 PowerShell 的 Compress-Archive。
+      # 注意 1：Windows runner 的 Git bash 里没有 zip 命令（会 exit 127），改用 PowerShell 的 Compress-Archive。
+      # 注意 2：可执行文件名来自 Cargo 包名（proxy-forge.exe），不是 productName（ProxyForge），
+      #        所以这里按通配符查找，避免写死文件名后再次失败。
       - name: 生成便携 zip（Windows）
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $rel = (Resolve-Path "src-tauri/target/release").Path
-          $exe = Join-Path $rel "ProxyForge.exe"
-          if (-not (Test-Path $exe)) { throw "未找到 $exe，打包未产出可执行文件" }
+          $exe = Get-ChildItem -Path $rel -Filter *.exe -File | Select-Object -First 1
+          if (-not $exe) { throw "未在 $rel 找到 exe，打包未产出可执行文件" }
+          Write-Host "使用可执行文件：$($exe.FullName)"
           $out = Join-Path $env:RUNNER_TEMP "ProxyForge-portable-windows.zip"
           if (Test-Path $out) { Remove-Item $out -Force }
-          $items = @($exe)
+          $items = @($exe.FullName)
           $res = Join-Path $rel "resources"
           if (Test-Path $res) { $items += $res }
           Compress-Archive -Path $items -DestinationPath $out -CompressionLevel Optimal

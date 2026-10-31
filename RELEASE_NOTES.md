@@ -1,5 +1,36 @@
 # Release Notes
 
+## v1.2.4（2026-10-31）—— 补齐 Android 库目标 + Windows 便携包命名
+
+v1.2.3 里 `latest.json` 已能正常合并，但 Android 与 Windows 仍各差最后一步。
+
+### Android —— `error: no library targets found in package 'proxy-forge'`
+
+- 根因：`tauri android build` 执行的是 `cargo build --lib`，而本项目的 Rust 代码此前全在 `src/main.rs` 里，Cargo 没有 lib 目标，Android 侧无从链接
+- 修复：按 Tauri 移动端标准结构拆分
+  - 新增 `src-tauri/src/lib.rs`，承载 `tcp_ping` / `save_text_file` 命令与 `run()` 入口，并加 `#[cfg_attr(mobile, tauri::mobile_entry_point)]`
+  - `src/main.rs` 精简为调用 `proxy_forge_lib::run()`，保留 Windows 的 `windows_subsystem` 属性
+  - `Cargo.toml` 增加 `[lib] crate-type = ["staticlib", "cdylib", "rlib"]` 与显式 `[[bin]]`
+- 桌面端行为不变（macOS / Linux 产物结构一致，`cargo check` 通过）
+
+### Windows —— 便携 zip 找不到可执行文件
+
+- 根因：上一版把文件名写死成 `ProxyForge.exe`，但 Tauri 产出的可执行文件来自 Cargo 包名，实际是 `proxy-forge.exe`
+- 修复：改为在 `target/release` 下按 `*.exe` 通配符查找并打印实际路径
+
+### 安装包（打 `v*` 标签后由 CI 自动产出并挂到 GitHub Release）
+
+| 平台 | 格式 |
+| --- | --- |
+| macOS (Apple Silicon / Intel) | `.dmg`（universal 合并包） |
+| Windows | NSIS 安装包（`.exe`）/ `.msi`（WiX）/ 可移植 `.zip` |
+| Linux | AppImage / `.deb` / `.rpm` |
+| Android | 通用 `.apk`（直接安装）/ `.aab`（Play 商店上架） |
+
+> 升级说明：功能与 v1.2.1 一致；Rust 侧仅调整了目标结构，未改动任何业务逻辑。
+
+---
+
 ## v1.2.3（2026-10-31）—— Windows 便携包 + Android SDK 两处收尾修复
 
 v1.2.2 已修好 Windows 的图标与 Android 的 setup-android，Windows 的 `.exe`/`.msi` 与 Android 的 SDK 安装都越过了原来的失败点，但又各暴露一个新问题，本次一并修掉。

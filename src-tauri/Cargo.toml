@@ -5,6 +5,16 @@ description = "代理工坊 — mihomo / sing-box 配置生成器"
 edition = "2021"
 rust-version = "1.77"
 
+[lib]
+# Tauri 移动端（Android/iOS）以动态库方式加载应用，`tauri android build` 执行的是
+# `cargo build --lib`，因此必须同时提供 lib 目标：cdylib 给移动端，staticlib 给 iOS，rlib 给单元测试。
+name = "proxy_forge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "proxy-forge"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
