@@ -170,7 +170,8 @@ export function runAllChecks(): CheckResult[] {
     singJson.outbounds.some((o: any) => o.tag === '🎮 游戏加速'),
   );
   check('sing-box fakeip', singJson.dns.fakeip?.enabled === true);
-  check('sing-box 默认域名解析器', singJson.route.default_domain_resolver?.server === 'dns-direct');
+  // 1.11 内核不认识 default_domain_resolver（1.12 才引入），必须不出现
+  check('sing-box 1.11 不写 default_domain_resolver', singJson.route.default_domain_resolver === undefined);
   check(
     'sing-box 路由器有功耗提示',
     sing.plan.tips.some((t: string) => t.includes('功耗')),

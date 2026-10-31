@@ -1,4 +1,5 @@
 import type { GenerateOptions, ProxyNode } from '../types';
+import { usesNewDnsFormat, usesNewInboundFields } from '../types';
 import type { CustomRuleType } from '../types';
 import type { ConfigPlan } from '../generator';
 
@@ -71,26 +72,26 @@ function mbps(v?: string): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-/** sing-box 1.12 的带宽写法（"100 Mbps"），缺省给 100 Mbps */
-function toBandwidth(v?: string): string {
-  const n = mbps(v);
-  return `${n && n > 0 ? n : 100} Mbps`;
-}
-
 /**
- * 端口跳跃：mihomo 的 `ports`（"1000-3000,443"）→ sing-box 的 `server_ports`（["1000:3000","443"]）。
- * sing-box 没有 `ports` 字段，写错会直接 decode 失败。
+ * 端口跳跃：mihomo 的 `ports`（"1000-3000,443"）→ sing-box 的 `server_ports`。
+ *
+ * sing-box 没有 `ports` 字段，且 `server_ports` 只接受 `起始:结束` 形式，
+ * 单个端口必须写成 `443:443`，否则报 "bad port range: 443"。
  */
 function toServerPorts(v: string): string[] {
   return v
     .split(/[,\s]+/)
     .map((x) => x.trim())
     .filter(Boolean)
-    .map((x) => x.replace('-', ':'));
+    .map((x) => {
+      const range = x.replace('-', ':');
+      return range.includes(':') ? range : `${range}:${range}`;
+    });
 }
 
 function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion']): Record<string, unknown> {
-  const isNew = version === '1.12';
+  // 1.12 起 uTLS 需要显式 enabled 字段
+  const newUtls = version !== '1.11';
   const base: Record<string, unknown> = {
     type: n.type === 'shadowsocksr' ? 'shadowsocks' : n.type,
     tag: n.name,
@@ -134,14 +135,10 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
       break;
     }
     case 'hysteria': {
-      // 带宽是 hysteria 的必填项，缺了 sing-box 会以 "missing upload speed" 拒绝启动
-      if (isNew) {
-        base.up = toBandwidth(n.up);
-        base.down = toBandwidth(n.down);
-      } else {
-        base.up_mbps = mbps(n.up) ?? 100;
-        base.down_mbps = mbps(n.down) ?? 100;
-      }
+      // 带宽是 hysteria 的必填项，缺了 sing-box 会以 "missing upload speed" 拒绝启动。
+      // 注意字段是 up_mbps / down_mbps —— 1.12 与 1.14 都不认 `up` / `down`（unknown field）。
+      base.up_mbps = mbps(n.up) ?? 100;
+      base.down_mbps = mbps(n.down) ?? 100;
       if (n.authStr) base.auth_str = n.authStr;
       if (n.obfsPassword) base.obfs = n.obfsPassword;
       // 端口跳跃：sing-box 用 server_ports（"443:8443" 数组），没有 mihomo 的 ports 字段
@@ -151,13 +148,8 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
     }
     case 'hysteria2': {
       base.password = n.password;
-      if (isNew) {
-        base.up = toBandwidth(n.up);
-        base.down = toBandwidth(n.down);
-      } else {
-        base.up_mbps = mbps(n.up) ?? 100;
-        base.down_mbps = mbps(n.down) ?? 100;
-      }
+      base.up_mbps = mbps(n.up) ?? 100;
+      base.down_mbps = mbps(n.down) ?? 100;
       if (n.obfsPassword) base.obfs = { type: 'salamander', password: n.obfsPassword };
       if (n.hopPorts) base.server_ports = toServerPorts(n.hopPorts);
       break;
@@ -217,7 +209,7 @@ function nodeToSingbox(n: ProxyNode, version: GenerateOptions['singboxVersion'])
     if (n.fingerprint) tls.utls = { enabled: true, fingerprint: n.fingerprint };
     base.tls = tls;
   } else if (n.type !== 'wireguard') {
-    const tls = tlsObject(n, isNew);
+    const tls = tlsObject(n, newUtls);
     if (tls) base.tls = tls;
   }
 
@@ -284,29 +276,47 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
   }
   dnsRules.push({ action: 'route', query_type: ['A', 'AAAA'], server: options.fakeIp ? 'dns-fakeip' : 'dns-remote' });
 
+  // 1.14 起 legacy DNS 格式被彻底移除（1.12 起弃用），必须按版本切换方言：
+  //   1.11 → address 字符串 + 独立 dns.fakeip 块
+  //   1.12+ → type + server，fakeip 作为 servers 里的一个条目
+  const newDns = usesNewDnsFormat(options.singboxVersion);
+  const dnsServers: Record<string, unknown>[] = newDns
+    ? [
+        { ...dnsServerOf(options.dnsDirect, 'direct'), tag: 'dns-direct' },
+        { ...dnsServerOf(options.dnsRemote, '🚀 节点选择'), tag: 'dns-remote' },
+        ...(options.fakeIp ? [{ type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.18.0.0/15' }] : []),
+      ]
+    : [
+        { tag: 'dns-direct', address: splitDnsFirst(options.dnsDirect), detour: 'direct' },
+        { tag: 'dns-remote', address: splitDnsFirst(options.dnsRemote), detour: '🚀 节点选择' },
+        ...(options.fakeIp ? [{ tag: 'dns-fakeip', address: 'fakeip' }] : []),
+      ];
+
   cfg.dns = {
-    servers: [
-      { tag: 'dns-direct', address: splitDnsFirst(options.dnsDirect), detour: 'direct' },
-      { tag: 'dns-remote', address: splitDnsFirst(options.dnsRemote), detour: '🚀 节点选择' },
-      ...(options.fakeIp ? [{ tag: 'dns-fakeip', address: 'fakeip' }] : []),
-    ],
+    servers: dnsServers,
     rules: dnsRules,
     final: 'dns-remote',
     strategy: options.ipv6 ? 'prefer_ipv6' : 'prefer_ipv4',
     independent_cache: true,
-    ...(options.fakeIp ? { fakeip: { enabled: true, inet4_range: '198.18.0.0/15' } } : {}),
+    ...(options.fakeIp && !newDns ? { fakeip: { enabled: true, inet4_range: '198.18.0.0/15' } } : {}),
   };
 
   /* ------------------------------ Inbounds ----------------------------- */
+  // 1.13 起入站的 sniff / sniff_override_destination / domain_strategy 被移除，
+  // 改为 route 规则动作；1.14 起再写旧字段会直接 FATAL。
+  const newInbound = usesNewInboundFields(options.singboxVersion);
+  const dnsStrategy = options.ipv6 ? 'prefer_ipv6' : 'prefer_ipv4';
+  const sniffFields = (override: boolean) =>
+    newInbound ? {} : { sniff: true, sniff_override_destination: override };
+
   const inbounds: Record<string, unknown>[] = [
     {
       type: 'mixed',
       tag: 'mixed-in',
       listen,
       listen_port: options.mixedPort,
-      sniff: true,
-      sniff_override_destination: true,
-      domain_strategy: options.ipv6 ? 'prefer_ipv6' : 'prefer_ipv4',
+      ...sniffFields(true),
+      ...(newInbound ? {} : { domain_strategy: dnsStrategy }),
     },
   ];
   if (options.enableTun) {
@@ -320,8 +330,7 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
       auto_route: true,
       strict_route: true,
       endpoint_independent_nat: !isRouter,
-      sniff: true,
-      sniff_override_destination: false,
+      ...sniffFields(false),
       stack: 'system',
       ...(isSidecar || isRouter ? { route_exclude_address: ['192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12'] } : {}),
     });
@@ -331,19 +340,29 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
       tag: 'tproxy-in',
       listen: '0.0.0.0',
       listen_port: 7893,
-      sniff: true,
-      sniff_override_destination: true,
+      ...sniffFields(true),
     });
     inbounds.push({
       type: 'redirect',
       tag: 'redirect-in',
       listen: '0.0.0.0',
       listen_port: 7892,
-      sniff: true,
-      sniff_override_destination: true,
+      ...sniffFields(true),
     });
   }
   cfg.inbounds = inbounds;
+
+  // 新版用 route 规则动作承担旧入站字段的职责。
+  // sniff 动作只有 sniffer / timeout 两个参数（没有 override_destination），
+  // 嗅探后连接目标会被自动改写，无需再显式声明。
+  const sniffRules: Record<string, unknown>[] = [];
+  if (newInbound) {
+    for (const ib of inbounds) {
+      const tag = ib.tag as string;
+      if (tag === 'mixed-in') sniffRules.push({ inbound: [tag], action: 'resolve', strategy: dnsStrategy });
+      sniffRules.push({ inbound: [tag], action: 'sniff' });
+    }
+  }
 
   /* ------------------------------ Outbounds ---------------------------- */
   const outbounds: Record<string, unknown>[] = [];
@@ -389,7 +408,7 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
   cfg.outbounds = outbounds;
 
   /* -------------------------------- Route ------------------------------ */
-  const routeRules: Record<string, unknown>[] = [];
+  const routeRules: Record<string, unknown>[] = [...sniffRules];
   // DNS 劫持：53 端口查询交给内置 DNS。sing-box 没有独立 DNS 监听端口，
   // 上游路由器把客户端 DNS 指向本机后，查询必须经入站被这条规则接管，
   // 否则网关模式下（RouterOS / 主路由把 DNS 指过来）所有解析都会失败。
@@ -431,7 +450,10 @@ export function buildSingbox(nodes: ProxyNode[], options: GenerateOptions, plan:
     })),
     final: options.finalRule === 'proxy' ? '🚀 节点选择' : 'direct',
     auto_detect_interface: true,
-    default_domain_resolver: { server: 'dns-direct', strategy: options.ipv6 ? 'prefer_ipv6' : 'prefer_ipv4' },
+    // default_domain_resolver 是 1.12 才引入的，1.11 写进去会 unknown field
+    ...(newDns
+      ? { default_domain_resolver: { server: 'dns-direct', strategy: options.ipv6 ? 'prefer_ipv6' : 'prefer_ipv4' } }
+      : {}),
   };
 
   /* --------------------------- Experimental ---------------------------- */
@@ -495,4 +517,32 @@ function splitDnsFirst(v: string): string {
       .map((x) => x.trim())
       .filter(Boolean)[0] || 'https://223.5.5.5/dns-query'
   );
+}
+
+/**
+ * 把用户填的 DNS 地址翻译成 sing-box 1.12+ 的服务器条目（1.14 起只认这种写法）。
+ *
+ * https://223.5.5.5/dns-query → { type: 'https', server: '223.5.5.5' }
+ * 8.8.8.8 / udp://8.8.8.8     → { type: 'udp',   server: '8.8.8.8' }
+ * tls://1.1.1.1               → { type: 'tls',   server: '1.1.1.1' }
+ * local                       → { type: 'local' }
+ * dhcp://auto                 → { type: 'dhcp' }
+ */
+function dnsServerOf(raw: string, detour: string): Record<string, unknown> {
+  const v = splitDnsFirst(raw).trim();
+  if (v === 'local') return { type: 'local' };
+
+  const m = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(v);
+  const scheme = (m ? m[1] : 'udp').toLowerCase();
+  const rest = m ? m[2] : v;
+
+  if (scheme === 'dhcp') {
+    const iface = rest.split('/')[0];
+    return iface && iface !== 'auto' ? { type: 'dhcp', interface: iface } : { type: 'dhcp' };
+  }
+
+  // DoH 的路径（/dns-query）在新格式里由 type 表达，不再需要
+  const server = rest.split('/')[0];
+  const type = ['tcp', 'tls', 'https', 'quic', 'h3'].includes(scheme) ? scheme : 'udp';
+  return { type, server, detour };
 }

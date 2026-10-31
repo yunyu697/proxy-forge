@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore';
 import { Card, Field, Input, Notice, SectionTitle, Select, StepFooter, Toggle } from './ui';
 import { DEVICE_PROFILES } from '../core/types';
+import type { SingBoxVersion } from '../core/types';
 
 export function SettingsStep({ onNext, onPrev }: { onNext: () => void; onPrev?: () => void }) {
   const options = useStore((s) => s.options);
@@ -38,13 +39,15 @@ export function SettingsStep({ onNext, onPrev }: { onNext: () => void; onPrev?: 
             </Select>
           </Field>
           {options.core === 'singbox' && (
-            <Field label="sing-box 版本" hint="不同版本的配置结构略有差异，按实际内核版本选择">
+            <Field label="sing-box 版本" hint="按实际内核版本选择；配置结构在 1.11 → 1.12 → 1.14 有三次破坏性变更">
               <Select
                 value={options.singboxVersion}
-                onChange={(e) => setOptions({ singboxVersion: e.target.value as '1.11' | '1.12' })}
+                onChange={(e) => setOptions({ singboxVersion: e.target.value as SingBoxVersion })}
               >
-                <option value="1.11">1.11.x</option>
+                <option value="1.11">1.11.x（旧 DNS 格式）</option>
                 <option value="1.12">1.12.x</option>
+                <option value="1.14">1.13 / 1.14.x</option>
+                <option value="1.16">1.15 / 1.16.x</option>
               </Select>
             </Field>
           )}

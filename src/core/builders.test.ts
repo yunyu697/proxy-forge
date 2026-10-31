@@ -122,8 +122,10 @@ describe('sing-box 配置兼容性', () => {
 
   it('强制 TLS 的协议都带 tls 块', () => {
     // trojan / anytls / hysteria2 缺 tls 会报 "TLS required"
+    // （anytls 是 1.12 才有的协议，1.11 会被剔除，所以这里用 1.12 生成）
+    const cfg12 = JSON.parse(build('singbox', { singboxVersion: '1.12' })) as typeof cfg;
     for (const type of ['trojan', 'anytls', 'hysteria2']) {
-      const o = cfg.outbounds.find((x) => x.type === type);
+      const o = cfg12.outbounds.find((x) => x.type === type);
       expect(o, `${type} 未生成`).toBeTruthy();
       expect(o!.tls, `${type} 缺 tls`).toMatchObject({ enabled: true });
     }
@@ -173,5 +175,89 @@ describe('sing-box 配置兼容性', () => {
     const ss = parsed.outbounds.find((o) => o.type === 'shadowsocks')!;
     expect(ss).not.toHaveProperty('plugin');
     expect(res.warnings.join('|')).toContain('插件');
+  });
+});
+
+describe('sing-box 版本方言', () => {
+  type Cfg = {
+    inbounds: Record<string, unknown>[];
+    outbounds: Record<string, unknown>[];
+    dns: { servers: Record<string, unknown>[]; fakeip?: unknown };
+    route: { rules: Record<string, unknown>[] };
+  };
+  const sb = (version: string) => JSON.parse(build('singbox', { singboxVersion: version })) as Cfg;
+
+  it('1.11 用旧 DNS 格式（address + 独立 fakeip 块）', () => {
+    const cfg = sb('1.11');
+    expect(cfg.dns.servers[0]).toHaveProperty('address');
+    expect(cfg.dns.servers[0]).not.toHaveProperty('type');
+    expect(cfg.dns.fakeip).toBeTruthy();
+  });
+
+  it('1.12 / 1.14 / 1.16 用新 DNS 格式（type + server，fakeip 是一个 server）', () => {
+    for (const v of ['1.12', '1.14', '1.16']) {
+      const cfg = sb(v);
+      expect(cfg.dns.servers[0], v).toMatchObject({ type: 'https', server: '223.5.5.5', tag: 'dns-direct' });
+      expect(cfg.dns.fakeip, v).toBeUndefined();
+      expect(cfg.dns.servers.map((s) => s.type), v).toContain('fakeip');
+    }
+  });
+
+  it('1.14 / 1.16 把入站 sniff 字段换成 route 规则动作', () => {
+    // 1.13 起入站 sniff / domain_strategy 被移除，1.14 起再写就 FATAL
+    for (const v of ['1.14', '1.16']) {
+      const cfg = sb(v);
+      for (const ib of cfg.inbounds) {
+        expect(ib, v).not.toHaveProperty('sniff');
+        expect(ib, v).not.toHaveProperty('sniff_override_destination');
+        expect(ib, v).not.toHaveProperty('domain_strategy');
+      }
+      const actions = cfg.route.rules.map((r) => r.action);
+      expect(actions, v).toContain('sniff');
+      expect(actions, v).toContain('resolve');
+      // sniff 动作只有 sniffer / timeout 两个参数，没有 override_destination
+      for (const r of cfg.route.rules.filter((x) => x.action === 'sniff')) {
+        expect(r).not.toHaveProperty('override_destination');
+      }
+    }
+  });
+
+  it('1.11 / 1.12 仍用旧入站字段', () => {
+    for (const v of ['1.11', '1.12']) {
+      const cfg = sb(v);
+      expect(cfg.inbounds[0], v).toMatchObject({ sniff: true });
+    }
+  });
+
+  it('hysteria 带宽一律用 up_mbps / down_mbps', () => {
+    // 1.12 与 1.14 都不认 up / down（unknown field）
+    for (const v of ['1.11', '1.12', '1.14', '1.16']) {
+      for (const o of sb(v).outbounds.filter((x) => x.type === 'hysteria' || x.type === 'hysteria2')) {
+        expect(o, v).not.toHaveProperty('up');
+        expect(o, v).not.toHaveProperty('down');
+        expect(o.up_mbps, v).toBeGreaterThan(0);
+        expect(o.down_mbps, v).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('default_domain_resolver 只在 1.12+ 出现', () => {
+    // 1.11 内核没有这个字段，写进去会 unknown field
+    const route = (v: string) => (sb(v) as unknown as { route: Record<string, unknown> }).route;
+    expect(route('1.11')).not.toHaveProperty('default_domain_resolver');
+    for (const v of ['1.12', '1.14', '1.16']) {
+      expect(route(v).default_domain_resolver, v).toMatchObject({ server: 'dns-direct' });
+    }
+  });
+
+  it('1.11 会剔除 AnyTLS 节点（1.12 才支持）', () => {
+    const res = generateConfig(nodes, { ...defaultOptions(), core: 'singbox', singboxVersion: '1.11' });
+    expect(res.content).not.toContain('anytls');
+    expect(res.warnings.join('|')).toContain('AnyTLS');
+  });
+
+  it('server_ports 的单端口写成 443:443', () => {
+    const hy2 = sb('1.14').outbounds.find((o) => o.type === 'hysteria2')!;
+    expect(hy2.server_ports).toEqual(['20000:30000']);
   });
 });

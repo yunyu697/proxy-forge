@@ -295,9 +295,15 @@ export function buildPlan(nodes: ProxyNode[], options: GenerateOptions): ConfigP
   if (options.device === 'client' && !options.enableTun) {
     warnings.push('客户端未开启 TUN，只有手动设置代理的应用会走代理，游戏机与部分 App 不受影响。');
   }
+  // AnyTLS 是 sing-box 1.12.0 才引入的 outbound，1.11 内核遇到会直接
+  // "unknown outbound type: anytls" 拒绝加载，因此按版本剔除并告警。
   if (options.core === 'singbox' && options.singboxVersion === '1.11') {
-    const hasAny = usable.some((n) => n.type === 'anytls');
-    if (hasAny) warnings.push('AnyTLS 需要 sing-box 1.11 及以上版本，请确保内核版本匹配。');
+    const anytls = usable.filter((n) => n.type === 'anytls');
+    if (anytls.length) {
+      for (const n of anytls) skipped.push({ node: n, reason: 'sing-box 1.11 不支持 AnyTLS 协议' });
+      usable = usable.filter((n) => n.type !== 'anytls');
+      warnings.push(`已跳过 ${anytls.length} 个 AnyTLS 节点：该协议需要 sing-box 1.12 及以上版本`);
+    }
   }
   if (options.strategy === 'blacklist' && !rsMap.has('geo-gfw')) {
     warnings.push('黑名单模式需要「GFWList」规则集，请在规则集中勾选它，否则境外流量会全部直连。');
@@ -353,6 +359,8 @@ export function prepareNodes(nodes: ProxyNode[], options: GenerateOptions): Prox
   if (options.core === 'singbox') {
     list = list
       .filter((n) => n.type !== 'shadowsocksr')
+      // AnyTLS 从 sing-box 1.12.0 才有，1.11 会 unknown outbound type
+      .filter((n) => !(options.singboxVersion === '1.11' && n.type === 'anytls'))
       // sing-box 的 ss plugin 是 SIP003 外部插件二进制，内核不内置 obfs / v2ray-plugin。
       // 保留该字段会让 sing-box 启动直接失败（plugin not found: obfs），因此统一剥离。
       .map((n) => (n.type === 'shadowsocks' && n.plugin ? { ...n, plugin: undefined, pluginOpts: undefined } : n));

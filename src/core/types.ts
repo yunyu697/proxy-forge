@@ -290,7 +290,29 @@ export const DEVICE_PROFILES: DeviceProfileMeta[] = [
 /* ==================================================================== */
 
 export type CoreTarget = 'mihomo' | 'singbox';
-export type SingBoxVersion = '1.11' | '1.12';
+
+/**
+ * sing-box 版本。
+ *
+ * 只有两个方言分水岭，选高版本永远向下兼容：
+ * - 1.11：DNS 仍是 `address` 字符串 + 独立 `dns.fakeip` 块，带宽用 `up_mbps` / `down_mbps`
+ * - 1.12 起：DNS 拆成 `type` + `server`，fakeip 变成 servers 里的一个条目，带宽用 `up` / `down`
+ * - 1.13 起：legacy outbound（block / dns / wireguard）彻底移除
+ * - 1.14 起：legacy DNS 格式彻底移除
+ *
+ * 因此 1.13 与 1.14 生成的配置完全一致，1.15 与 1.16 同理，UI 上合并展示。
+ */
+export type SingBoxVersion = '1.11' | '1.12' | '1.14' | '1.16';
+
+/** 使用新版 DNS 格式（1.12+） */
+export function usesNewDnsFormat(v: SingBoxVersion): boolean {
+  return v !== '1.11';
+}
+
+/** 入站不再写 sniff / domain_strategy，改用 route 规则动作（1.13+，1.14 起旧字段 FATAL） */
+export function usesNewInboundFields(v: SingBoxVersion): boolean {
+  return v === '1.14' || v === '1.16';
+}
 
 /* ==================================================================== */
 /* 生成设置                                                             */
